@@ -16,10 +16,22 @@ function ThemeProvider() {
   // Fix mobile browser viewport height (omnibox hiding bottom nav)
   useEffect(() => {
     const setVH = () => {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
+      // Use visualViewport API for accurate mobile Safari height
+      const height = window.visualViewport
+        ? window.visualViewport.height
+        : window.innerHeight;
+      document.documentElement.style.setProperty('--vh', `${height * 0.01}px`);
     };
     setVH();
+    const viewport = window.visualViewport;
+    if (viewport) {
+      viewport.addEventListener('resize', setVH);
+      viewport.addEventListener('scroll', setVH);
+      return () => {
+        viewport.removeEventListener('resize', setVH);
+        viewport.removeEventListener('scroll', setVH);
+      };
+    }
     window.addEventListener('resize', setVH);
     window.addEventListener('orientationchange', setVH);
     return () => {

@@ -36,7 +36,8 @@
 
 html, body, #root {
   height: 100%;
-  height: calc(var(--vh, 1dvh) * 100);
+  height: 100svh;
+  height: calc(var(--vh, 1svh) * 100);
   overflow: hidden;
 }
 
