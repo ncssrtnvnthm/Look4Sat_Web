@@ -8,6 +8,8 @@ import { MapPage } from '../features/map/MapPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { useSettingsStore } from '../data/stores';
 
+const BASENAME = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 function ThemeProvider() {
   const otherSettings = useSettingsStore((s) => s.otherSettings);
 
@@ -34,7 +36,7 @@ function ThemeProvider() {
 
 export function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={BASENAME}>
       <ThemeProvider />
       <Routes>
         <Route element={<MainLayout />}>
