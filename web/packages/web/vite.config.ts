@@ -4,17 +4,17 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
 import { celestrakProxy } from './celestrakProxy';
 
-export default defineConfig({
-  base: '/Look4Sat_Web/',
+export default defineConfig(({ mode }) => ({
+  base: mode === 'production' ? '/Look4Sat_Web/' : '/',
   plugins: [
     react(),
     celestrakProxy(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.svg', 'wasm/*.wasm'],
       manifestFilename: 'manifest.json',
       workbox: {
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,wasm,svg,png,woff2}'],
         runtimeCaching: [
           {
