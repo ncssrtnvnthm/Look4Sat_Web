@@ -245,6 +245,29 @@ export function SettingsPage() {
           </div>
         </section>
 
+        {/* About */}
+        <section className={styles.section}>
+          <h3 className={styles.sectionTitle}>About</h3>
+          <div className={styles.aboutLinks}>
+            <a
+              href="https://github.com/rt-bishop/Look4Sat"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.aboutLink}
+            >
+              Original Look4Sat (Android)
+            </a>
+            <a
+              href="https://github.com/ncssrtnvnthm/Look4Sat_Web"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.aboutLink}
+            >
+              Look4Sat Web (this project)
+            </a>
+          </div>
+        </section>
+
         {/* Version */}
         <div className={styles.version}>
           Look4Sat Web v{store.appVersionName}

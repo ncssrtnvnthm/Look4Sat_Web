@@ -1,15 +1,12 @@
 import { useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { TopBar, SwipeableItem } from '../../presentation/Components';
 import { useSatellitesStore, getFilteredItems } from './satellitesStore';
-import { useSettingsStore } from '../../data/stores';
 import styles from './SatellitesPage.module.css';
 
 export function SatellitesPage() {
   const store = useSatellitesStore();
   const filteredItems = getFilteredItems(store);
   const selectedCount = store.itemsList.filter((i) => i.isSelected).length;
-  const satelliteCount = useSettingsStore((s) => s.databaseState.numberOfSatellites);
 
   useEffect(() => {
     store.loadSatellites();
@@ -74,25 +71,24 @@ export function SatellitesPage() {
             </p>
           </div>
           <button className={styles.warningDismiss} onClick={store.dismissWarning}>
-            Got it
+            ✕
           </button>
         </div>
       )}
 
-      {/* No satellite data warning */}
-      {satelliteCount === 0 && (
+      {/* Warning */}
+      {store.shouldSeeWarning && (
         <div className={styles.warning}>
-          <span>
-            No satellite data loaded. Go to{' '}
-            <Link to="/settings" style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}>
-              Settings
-            </Link>{' '}
-            and download satellite data to get started.
-          </span>
+          <div className={styles.warningContent}>
+            First time? Select satellites to track, then save. Use categories to filter by type.
+          </div>
+          <button className={styles.warningDismiss} onClick={store.dismissWarning}>
+            ✕
+          </button>
         </div>
       )}
 
-      {/* Category filter chips */}
+            {/* Category filter chips */}
       <div className={styles.categoryBar}>
         {store.availableCategories.map(({ key, label }) => {
           const active = store.currentCategories.includes(key);
@@ -111,16 +107,6 @@ export function SatellitesPage() {
       {/* Loading */}
       {store.isLoading && (
         <div className={styles.loading}>Loading satellite data...</div>
-      )}
-
-      {/* Warning */}
-      {store.shouldSeeWarning && (
-        <div className={styles.warning}>
-          <span>First time? Select satellites to track, then save. Use categories to filter by type.</span>
-          <button className={styles.dismissBtn} onClick={store.dismissWarning}>
-            ✕
-          </button>
-        </div>
       )}
 
       {/* List */}

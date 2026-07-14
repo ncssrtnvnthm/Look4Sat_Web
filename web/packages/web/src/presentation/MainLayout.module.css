@@ -11,6 +11,21 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.warning {
+  padding: 10px 16px;
+  background: rgba(255, 183, 77, 0.12);
+  border-bottom: 1px solid rgba(255, 183, 77, 0.3);
+  font-size: 13px;
+  color: var(--color-on-surface);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.warningLink {
+  color: var(--color-sun);
+  font-weight: 600;
+}
+
 .nav {
   display: flex;
   justify-content: space-around;
