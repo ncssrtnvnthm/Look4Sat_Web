@@ -2,6 +2,8 @@
 
 > Built upon [Look4Sat](https://github.com/rt-bishop/Look4Sat) by [rt-bishop](https://github.com/rt-bishop)
 
+**Try it online:** [ncssrtnvnthm.github.io/Look4Sat_Web](https://ncssrtnvnthm.github.io/Look4Sat_Web/)
+
 [![Look4Sat CI](https://github.com/ncssrtnvnthm/Look4Sat_Web/actions/workflows/release.yml/badge.svg)](https://github.com/ncssrtnvnthm/Look4Sat_Web/actions/workflows/release.yml)
 
 [<img src="https://play.google.com/intl/en_gb/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80">](https://play.google.com/store/apps/details?id=com.rtbishop.look4sat)

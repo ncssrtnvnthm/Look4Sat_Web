@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { TopBar, TimerRow, SwipeableItem } from '../../presentation/Components';
 import { usePassesStore, formatPassTime, groupPassesByDate } from './passesStore';
 import { useSettingsStore, useSelectedStore } from '../../data/stores';
@@ -9,6 +10,7 @@ let timerId = 0;
 export function PassesPage() {
   const store = usePassesStore();
   const isUtc = useSettingsStore((s) => s.otherSettings.stateOfUtc);
+  const satelliteCount = useSettingsStore((s) => s.databaseState.numberOfSatellites);
   const grouped = groupPassesByDate(store.itemsList);
 
   const handlePassClick = (catNum: number) => {
@@ -67,6 +69,19 @@ export function PassesPage() {
           <button className={styles.dismissBtn} onClick={store.dismissWhatsNew}>
             ✕
           </button>
+        </div>
+      )}
+
+      {/* No satellite data warning */}
+      {satelliteCount === 0 && !store.isRefreshing && (
+        <div className={styles.warning}>
+          <span>
+            No satellite data loaded. Go to{' '}
+            <Link to="/settings" style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}>
+              Settings
+            </Link>{' '}
+            and download satellite data to get started.
+          </span>
         </div>
       )}
 
