@@ -1,6 +1,7 @@
-# Look4Sat AI Agent Instructions
+# Look4Sat_Web AI Agent Instructions
 
-This is the canonical project guide for all AI assistants working on Look4Sat.
+This is the canonical project guide for all AI assistants working on Look4Sat_Web.
+This project is a fork of [Look4Sat](https://github.com/rt-bishop/Look4Sat) by [rt-bishop](https://github.com/rt-bishop).
 All assistant-specific files (`CLAUDE.md`, `.github/copilot-instructions.md`) point here.
 
 ---

@@ -1,0 +1,38 @@
+{
+  "name": "Look4Sat",
+  "short_name": "Look4Sat",
+  "description": "Amateur radio satellite tracker and pass predictor — track 9000+ satellites with SGP4/SDP4 orbital models",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "categories": ["navigation", "education", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Passes",
+      "short_name": "Passes",
+      "url": "/passes"
+    },
+    {
+      "name": "Radar",
+      "short_name": "Radar",
+      "url": "/radar"
+    },
+    {
+      "name": "Map",
+      "short_name": "Map",
+      "url": "/map"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

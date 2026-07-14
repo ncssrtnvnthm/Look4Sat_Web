@@ -1,0 +1,36 @@
+{
+  "name": "look4sat-web",
+  "private": true,
+  "version": "4.4.3",
+  "type": "module",
+  "license": "GPL-3.0",
+  "homepage": "https://ncssrtnvnthm.github.io/Look4Sat_Web/",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx"
+  },
+  "dependencies": {
+    "dexie": "^4.0.11",
+    "idb-keyval": "^6.2.1",
+    "leaflet": "^1.9.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-leaflet": "^5.0.0",
+    "react-router-dom": "^7.5.0",
+    "zustand": "^5.0.5"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.17",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.2",
+    "vite-plugin-pwa": "^0.21.2",
+    "workbox-precaching": "^7.3.0",
+    "workbox-routing": "^7.3.0",
+    "workbox-strategies": "^7.3.0"
+  }
+}

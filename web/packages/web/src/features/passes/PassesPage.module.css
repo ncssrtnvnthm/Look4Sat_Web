@@ -1,0 +1,274 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.actionBtn {
+  padding: 4px 12px;
+  border: 1px solid var(--color-outline);
+  border-radius: 16px;
+  background: var(--color-surface-container);
+  color: var(--color-on-surface);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.actionBtn:hover { background: var(--color-surface-container-high); }
+
+.nextPass {
+  margin: 0 16px 12px;
+  padding: 14px;
+  background: var(--color-surface-container);
+  border-radius: 12px;
+}
+
+.nextPassName {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.nextPassDetails {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+  margin-top: 6px;
+}
+
+.warning {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 16px 8px;
+  padding: 10px 12px;
+  background: rgba(79, 195, 247, 0.1);
+  border: 1px solid rgba(79, 195, 247, 0.25);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.dismissBtn {
+  background: none;
+  border: none;
+  color: var(--color-on-surface-variant);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.loading, .empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--color-on-surface-variant);
+  font-size: 14px;
+}
+
+.progressSection {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  background: var(--color-surface-container);
+  border-radius: 8px;
+}
+
+.progressBar {
+  flex: 1;
+  height: 6px;
+  background: var(--color-surface-container-high);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
+.progressText {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-on-surface-variant);
+  white-space: nowrap;
+  min-width: 100px;
+}
+
+.cancelBtn {
+  padding: 4px 10px;
+  border: 1px solid var(--color-error);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-error);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cancelBtn:hover {
+  background: rgba(207, 102, 121, 0.1);
+}
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.group {
+  margin-bottom: 4px;
+}
+
+.groupHeader {
+  padding: 8px 16px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--color-surface);
+  position: sticky;
+  top: 0;
+}
+
+.passRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.passInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.passName {
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.passTimes {
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+
+.noradLink {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 12px;
+}
+.noradLink:hover { text-decoration: underline; }
+
+.passElev {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-aos);
+  margin-left: 8px;
+}
+
+.progressBar {
+  height: 3px;
+  background: var(--color-surface-container-high);
+  border-radius: 2px;
+  margin-top: 8px;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 2px;
+  transition: width 1s linear;
+}
+
+/* ── Filter dialog ── */
+
+.dialogOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog {
+  background: var(--color-surface-container);
+  border-radius: 12px;
+  padding: 20px;
+  width: min(360px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.dialogTitle {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.dialogRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.dialogRow input[type='range'] {
+  width: 120px;
+  accent-color: var(--color-primary);
+}
+
+.dialogRow select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-outline);
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font-size: 14px;
+}
+
+.dialogRow input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary);
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.dialogBtn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--color-outline);
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dialogBtnPrimary {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}

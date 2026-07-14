@@ -1,0 +1,121 @@
+.timerRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.timerLabel {
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+}
+
+.timerValue {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.aos { color: var(--color-aos); }
+.los { color: var(--color-los); }
+
+.timerPhase {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--color-surface-container-high);
+}
+
+/* IconCard */
+.iconCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--color-surface-container);
+  border-radius: 8px;
+  min-width: 64px;
+}
+
+.iconCardIcon { font-size: 20px; }
+
+.iconCardLabel {
+  font-size: 10px;
+  color: var(--color-on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.iconCardValue {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* TopBar */
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px 4px;
+}
+
+.topBarTitle {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.topBarActions {
+  display: flex;
+  gap: 8px;
+}
+
+/* SwipeableItem */
+.swipeableItem {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-outline);
+  cursor: pointer;
+  transition: background-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.swipeableItem:hover {
+  background: var(--color-surface-container);
+}
+
+.swipeableItem:active {
+  background: var(--color-surface-container-high);
+}
+
+/* NextPassRow */
+.nextPassRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--color-surface-container);
+  border-radius: 8px;
+}
+
+.nextPassName {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nextPassTime {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+}
+
+.nextPassElev {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-aos);
+}

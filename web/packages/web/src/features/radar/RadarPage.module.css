@@ -1,0 +1,104 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.timerSection {
+  padding: 0 16px 4px;
+}
+
+.bottomContent {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.radarContainer {
+  flex: 0 0 auto;
+  width: min(100%, 340px);
+  aspect-ratio: 1 / 1;
+  align-self: center;
+}
+
+.infoCards {
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 12px;
+  gap: 6px;
+}
+
+.actionBtn {
+  padding: 4px 10px;
+  border: 1px solid var(--color-outline);
+  border-radius: 16px;
+  background: var(--color-surface-container);
+  color: var(--color-on-surface);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.actionBtn:hover { background: var(--color-surface-container-high); }
+
+.satSelect {
+  padding: 2px 6px;
+  border: 1px solid var(--color-outline);
+  border-radius: 8px;
+  background: var(--color-surface-container);
+  color: var(--color-on-surface);
+  font-size: 12px;
+  max-width: 140px;
+  cursor: pointer;
+}
+
+.noradLink {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-size: 14px;
+}
+.noradLink:hover { text-decoration: underline; }
+
+/* ── Radio transponder list ── */
+
+.radioList {
+  padding: 4px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.radioRow {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--color-surface-container);
+  border: 1px solid var(--color-outline);
+}
+
+.radioDesc {
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: var(--color-on-surface);
+}
+
+.radioFreqs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.radioFreq {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.radioMode {
+  color: var(--color-on-surface-variant);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-surface-container-high);
+  font-size: 11px;
+}

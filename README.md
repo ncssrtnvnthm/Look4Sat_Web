@@ -1,6 +1,8 @@
-# Look4Sat: Satellite tracker
+# Look4Sat_Web: Satellite tracker
 
-[![Look4Sat CI](https://github.com/rt-bishop/Look4Sat/actions/workflows/release.yml/badge.svg)](https://github.com/rt-bishop/Look4Sat/actions/workflows/release.yml)
+> Built upon [Look4Sat](https://github.com/rt-bishop/Look4Sat) by [rt-bishop](https://github.com/rt-bishop)
+
+[![Look4Sat CI](https://github.com/ncssrtnvnthm/Look4Sat_Web/actions/workflows/release.yml/badge.svg)](https://github.com/ncssrtnvnthm/Look4Sat_Web/actions/workflows/release.yml)
 
 [<img src="https://play.google.com/intl/en_gb/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80">](https://play.google.com/store/apps/details?id=com.rtbishop.look4sat)
 [<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="80">](https://f-droid.org/packages/com.rtbishop.look4sat/)
@@ -36,10 +38,10 @@ It is now and always will be completely ad-free and open-source.
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=rt-bishop%2FLook4Sat&type=timeline&legend=top-left">
+<a href="https://www.star-history.com/?repos=ncssrtnvnthm%2FLook4Sat_Web&type=timeline&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=rt-bishop/Look4Sat&type=timeline&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=rt-bishop/Look4Sat&type=timeline&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=rt-bishop/Look4Sat&type=timeline&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=ncssrtnvnthm/Look4Sat_Web&type=timeline&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=ncssrtnvnthm/Look4Sat_Web&type=timeline&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=ncssrtnvnthm/Look4Sat_Web&type=timeline&legend=top-left" />
  </picture>
 </a>
