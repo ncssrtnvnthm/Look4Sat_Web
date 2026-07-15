@@ -54,6 +54,60 @@
   cursor: not-allowed;
 }
 
+.manualPos {
+  margin-top: 10px;
+}
+
+.manualPosLabel {
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+  margin-bottom: 6px;
+  display: block;
+}
+
+.manualPosRow {
+  display: flex;
+  gap: 6px;
+}
+
+.posInput {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--color-outline);
+  border-radius: 8px;
+  background: var(--color-surface-container);
+  color: var(--color-on-surface);
+  font-size: 13px;
+  outline: none;
+}
+
+.posInput:focus {
+  border-color: var(--color-primary);
+}
+
+.posApplyBtn {
+  padding: 8px 14px;
+  border: 1px solid var(--color-primary);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.posApplyBtn:hover {
+  background: rgba(123, 159, 212, 0.12);
+}
+
+.posHint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+}
+
 .updateMsg {
   margin-top: 8px;
   padding: 8px 12px;

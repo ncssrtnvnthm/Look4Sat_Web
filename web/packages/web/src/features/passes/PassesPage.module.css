@@ -30,6 +30,11 @@
   margin-bottom: 4px;
 }
 
+.selectedBadge {
+  font-size: 14px;
+  opacity: 0.5;
+}
+
 .nextPassDetails {
   display: flex;
   gap: 16px;

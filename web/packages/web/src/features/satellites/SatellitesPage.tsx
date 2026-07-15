@@ -12,14 +12,6 @@ export function SatellitesPage() {
     store.loadSatellites();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const toggleCategory = (key: string) => {
-    const current = store.currentCategories;
-    const next = current.includes(key)
-      ? current.filter((c) => c !== key)
-      : [...current, key];
-    store.setCategories(next);
-  };
-
   return (
     <div className={styles.page}>
       <TopBar
@@ -88,20 +80,23 @@ export function SatellitesPage() {
         </div>
       )}
 
-            {/* Category filter chips */}
+            {/* Category dropdown */}
       <div className={styles.categoryBar}>
-        {store.availableCategories.map(({ key, label }) => {
-          const active = store.currentCategories.includes(key);
-          return (
-            <button
-              key={key}
-              className={`${styles.categoryChip} ${active ? styles.categoryChipActive : ''}`}
-              onClick={() => toggleCategory(key)}
-            >
+        <select
+          className={styles.categorySelect}
+          value={store.currentCategories[0] || ''}
+          onChange={(e) => {
+            const val = e.target.value;
+            store.setCategories(val ? [val] : []);
+          }}
+        >
+          <option value="">All Satellites ({store.itemsList.length})</option>
+          {store.availableCategories.map(({ key, label }) => (
+            <option key={key} value={key}>
               {label}
-            </button>
-          );
-        })}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Loading */}

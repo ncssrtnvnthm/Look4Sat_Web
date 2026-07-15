@@ -10,6 +10,9 @@ export function SettingsPage() {
   const { otherSettings, stationPosition, databaseState } = store;
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [manualLat, setManualLat] = useState(stationPosition.latitude.toString());
+  const [manualLon, setManualLon] = useState(stationPosition.longitude.toString());
+  const [manualAlt, setManualAlt] = useState(stationPosition.altitude.toString());
 
   // Refresh DB counts on mount
   useEffect(() => {
@@ -118,6 +121,51 @@ export function SettingsPage() {
           >
             📍 Get GPS Position
           </button>
+          <div className={styles.manualPos}>
+            <span className={styles.manualPosLabel}>Or enter manually:</span>
+            <div className={styles.manualPosRow}>
+              <input
+                type="number"
+                className={styles.posInput}
+                placeholder="Latitude"
+                value={manualLat}
+                onChange={(e) => setManualLat(e.target.value)}
+                step="any"
+              />
+              <input
+                type="number"
+                className={styles.posInput}
+                placeholder="Longitude"
+                value={manualLon}
+                onChange={(e) => setManualLon(e.target.value)}
+                step="any"
+              />
+              <input
+                type="number"
+                className={styles.posInput}
+                placeholder="Altitude (m)"
+                value={manualAlt}
+                onChange={(e) => setManualAlt(e.target.value)}
+                step="any"
+              />
+              <button
+                className={styles.posApplyBtn}
+                onClick={() => {
+                  const lat = parseFloat(manualLat);
+                  const lon = parseFloat(manualLon);
+                  const alt = parseFloat(manualAlt) || 0;
+                  if (!isNaN(lat) && !isNaN(lon)) {
+                    store.setStationPosition({ latitude: lat, longitude: lon, altitude: alt });
+                  }
+                }}
+              >
+                Set
+              </button>
+            </div>
+          </div>
+          <p className={styles.posHint}>
+            💡 You can also drop a pin on the <strong>Map</strong> page to set your position visually.
+          </p>
         </section>
 
         {/* Data Section */}

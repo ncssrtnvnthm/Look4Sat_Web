@@ -61,7 +61,8 @@ export const useSatellitesStore = create<SatellitesState>()((set, get) => ({
       }
     }
     const availableCategories = [...catCounts.entries()]
-      .sort((a, b) => b[1] - a[1]) // most populous first
+      .filter(([key]) => key !== 'All') // "All" is the static default option
+      .sort((a, b) => b[1] - a[1])
       .map(([key, count]) => ({
         key,
         label: `${categoryDisplayName(key)} (${count})`,

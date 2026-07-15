@@ -13,33 +13,6 @@ const BASENAME = import.meta.env.BASE_URL.replace(/\/$/, '');
 function ThemeProvider() {
   const otherSettings = useSettingsStore((s) => s.otherSettings);
 
-  // Fix mobile browser viewport height (omnibox hiding bottom nav)
-  useEffect(() => {
-    const setVH = () => {
-      // Use visualViewport API for accurate mobile Safari height
-      const height = window.visualViewport
-        ? window.visualViewport.height
-        : window.innerHeight;
-      document.documentElement.style.setProperty('--vh', `${height * 0.01}px`);
-    };
-    setVH();
-    const viewport = window.visualViewport;
-    if (viewport) {
-      viewport.addEventListener('resize', setVH);
-      viewport.addEventListener('scroll', setVH);
-      return () => {
-        viewport.removeEventListener('resize', setVH);
-        viewport.removeEventListener('scroll', setVH);
-      };
-    }
-    window.addEventListener('resize', setVH);
-    window.addEventListener('orientationchange', setVH);
-    return () => {
-      window.removeEventListener('resize', setVH);
-      window.removeEventListener('orientationchange', setVH);
-    };
-  }, []);
-
   useEffect(() => {
     const root = document.documentElement;
     if (otherSettings.stateOfLightTheme) {

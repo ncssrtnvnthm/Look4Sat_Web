@@ -10,8 +10,10 @@ export function PassesPage() {
   const store = usePassesStore();
   const isUtc = useSettingsStore((s) => s.otherSettings.stateOfUtc);
   const grouped = groupPassesByDate(store.itemsList);
+  const activePass = store.selectedPass ?? store.nextPass;
 
   const handlePassClick = (catNum: number) => {
+    store.selectPass(catNum);
     const selectedIds = useSelectedStore.getState().selectedIds;
     const idx = selectedIds.indexOf(catNum);
     if (idx >= 0) {
@@ -42,19 +44,26 @@ export function PassesPage() {
       />
 
       {/* Next pass countdown */}
-      {store.nextPass && (
-        <div className={styles.nextPass}>
-          <div className={styles.nextPassName}>{store.nextPass.name}</div>
+      {activePass && (
+        <div className={styles.nextPass} onClick={store.selectedPass ? store.resetSelectedPass : undefined} style={store.selectedPass ? { cursor: 'pointer' } : undefined}>
+          <div className={styles.nextPassName}>
+            {activePass.name}
+            {store.selectedPass && (
+              <span className={styles.selectedBadge} title="Click to show overall next pass">
+                {' '}↩
+              </span>
+            )}
+          </div>
           <TimerRow
             time={store.nextTime}
             isAos={store.isNextTimeAos}
             label={store.isNextTimeAos ? 'Next AOS in' : 'Next LOS in'}
           />
           <div className={styles.nextPassDetails}>
-            <span>Max elev: {store.nextPass.maxElevation.toFixed(0)}°</span>
+            <span>Max elev: {activePass.maxElevation.toFixed(0)}°</span>
             <span>
-              {formatPassTime(store.nextPass.aosTime, isUtc)} →{' '}
-              {formatPassTime(store.nextPass.losTime, isUtc)}
+              {formatPassTime(activePass.aosTime, isUtc)} →{' '}
+              {formatPassTime(activePass.losTime, isUtc)}
             </span>
           </div>
         </div>

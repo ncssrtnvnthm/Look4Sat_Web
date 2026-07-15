@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline } from 'react-leaflet';
+import { useEffect, useState, useCallback } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { TopBar } from '../../presentation/Components';
 import { useMapStore } from './mapStore';
@@ -36,10 +36,38 @@ const satIcon = L.divIcon({
   iconAnchor: [7, 7],
 });
 
+function StationClickHandler({
+  active,
+  onSetPosition,
+}: {
+  active: boolean;
+  onSetPosition: (lat: number, lon: number) => void;
+}) {
+  useMapEvents({
+    click(e) {
+      if (active) {
+        onSetPosition(e.latlng.lat, e.latlng.lng);
+      }
+    },
+  });
+  return null;
+}
+
 export function MapPage() {
   const store = useMapStore();
-  const { stationPosition, selectedSat, sunLat, sunLon, moonLat, moonLon, allSatellites, selectedIndex, satLat, satLon } = store;
+  const { selectedSat, sunLat, sunLon, moonLat, moonLon, allSatellites, selectedIndex, satLat, satLon } = store;
+  const stationPosition = useSettingsStore((s) => s.stationPosition);
+  const setStationPosition = useSettingsStore((s) => s.setStationPosition);
   const lightTheme = useSettingsStore((s) => s.otherSettings.stateOfLightTheme);
+  const [pinning, setPinning] = useState(false);
+
+  const handleSetPosition = useCallback(
+    (lat: number, lon: number) => {
+      setStationPosition({ latitude: lat, longitude: lon, altitude: 0 });
+      setPinning(false);
+    },
+    [setStationPosition],
+  );
 
   useEffect(() => {
     store.initMap();
@@ -74,32 +102,39 @@ export function MapPage() {
   const tileAttr = '&copy; <a href="https://carto.com/">CARTO</a> | <a href="https://www.openstreetmap.org/copyright">OSM</a>';
 
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${pinning ? styles.pinning : ''}`}>
       <TopBar
         title={selectedSat?.name ?? 'Map'}
         actions={
-          allSatellites.length > 1 ? (
-            <>
-              <button className={styles.actionBtn} onClick={store.selectPrev}>◀</button>
-              <span className={styles.satIndex}>
-                {selectedIndex + 1}/{allSatellites.length}
-              </span>
-              <button className={styles.actionBtn} onClick={store.selectNext}>▶</button>
-              <select
-                className={styles.satSelect}
-                value={selectedIndex}
-                onChange={(e) => store.selectSatellite(Number(e.target.value))}
-              >
-                {allSatellites.map((sat, i) => (
-                  <option key={sat.catnum} value={i}>
-                    {sat.name}
-                  </option>
-                ))}
-              </select>
-            </>
-          ) : null
+          <button
+            className={`${styles.actionBtn} ${pinning ? styles.actionBtnActive : ''}`}
+            onClick={() => setPinning((p) => !p)}
+          >
+            📍 {pinning ? 'Tap map…' : 'Drop Pin'}
+          </button>
         }
       />
+
+      {allSatellites.length > 1 && (
+        <div className={styles.satToolbar}>
+          <button className={styles.actionBtn} onClick={store.selectPrev}>◀</button>
+          <span className={styles.satIndex}>
+            {selectedIndex + 1}/{allSatellites.length}
+          </span>
+          <button className={styles.actionBtn} onClick={store.selectNext}>▶</button>
+          <select
+            className={styles.satSelect}
+            value={selectedIndex}
+            onChange={(e) => store.selectSatellite(Number(e.target.value))}
+          >
+            {allSatellites.map((sat, i) => (
+              <option key={sat.catnum} value={i}>
+                {sat.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className={styles.mapContainer}>
         <MapContainer
@@ -114,6 +149,9 @@ export function MapPage() {
             attribution={tileAttr}
             url={tileUrl}
           />
+
+          {/* Click to set station position */}
+          <StationClickHandler active={pinning} onSetPosition={handleSetPosition} />
 
           {/* Day/night illumination overlay */}
           <SunTerminator />

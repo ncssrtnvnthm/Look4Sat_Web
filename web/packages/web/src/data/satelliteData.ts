@@ -281,11 +281,12 @@ export async function fetchAndStoreSatelliteData(
 
 export async function fetchTransceivers(url?: string): Promise<SatRadio[]> {
   let finalUrl = url || useSettingsStore.getState().dataSourcesSettings.transceiversUrl;
-  // Fix old persisted URLs that no longer work
-  if (finalUrl.includes('raw.githubusercontent.com')) {
-    finalUrl = 'https://db.satnogs.org/api/transmitters/?format=json';
-  }
-  if (finalUrl.startsWith('/api/satnogs')) {
+  // Fix old persisted proxy-path URLs and any other bad URLs
+  if (
+    finalUrl.startsWith('/api/satnogs') ||
+    finalUrl.startsWith('/api/') ||
+    !finalUrl.startsWith('http')
+  ) {
     finalUrl = 'https://db.satnogs.org/api/transmitters/?format=json';
   }
   // Use proxy in dev mode, direct URL in production

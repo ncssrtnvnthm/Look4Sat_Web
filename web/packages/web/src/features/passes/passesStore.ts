@@ -12,6 +12,7 @@ interface PassesState {
   isRadiosDialogShown: boolean;
   isRefreshing: boolean;
   nextPass: OrbitalPass | null;
+  selectedPass: OrbitalPass | null;
   nextTime: string;
   isNextTimeAos: boolean;
   hours: number;
@@ -30,6 +31,8 @@ interface PassesState {
   cancelRefresh: () => void;
   tickTimers: () => void;
   dismissWhatsNew: () => void;
+  selectPass: (catNum: number) => void;
+  resetSelectedPass: () => void;
   filterPasses: (hours: number, elevation: number, showDeepSpace: boolean) => void;
   filterRadios: (modes: string[]) => void;
   togglePassesDialog: () => void;
@@ -44,6 +47,7 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
   isRadiosDialogShown: false,
   isRefreshing: true,
   nextPass: null,
+  selectedPass: null,
   nextTime: '00:00:00',
   isNextTimeAos: true,
   hours: 12,
@@ -138,18 +142,21 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
 
     allPasses.sort((a, b) => a.aosTime - b.aosTime);
 
-    for (const pass of allPasses) {
+    // Remove already-ended passes
+    const upcomingPasses = allPasses.filter((p) => p.losTime > now);
+
+    for (const pass of upcomingPasses) {
       if (now >= pass.aosTime && now <= pass.losTime) {
         pass.progress = (now - pass.aosTime) / (pass.losTime - pass.aosTime);
       }
     }
 
-    const nextPass = allPasses.find((p) => p.aosTime > now) || allPasses[0] || null;
+    const nextPass = upcomingPasses.find((p) => p.aosTime > now) || upcomingPasses[0] || null;
 
     set({
       isRefreshing: false,
-      itemsList: allPasses,
-      groupedPasses: groupPassesByDate(allPasses),
+      itemsList: upcomingPasses,
+      groupedPasses: groupPassesByDate(upcomingPasses),
       nextPass,
       calcProgress: total,
     });
@@ -159,18 +166,19 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
   },
 
   tickTimers: () => {
-    const { nextPass } = get();
-    const now = getAdjustedTime(); // Use adjusted time so countdown matches offset perspective
+    const { nextPass, selectedPass } = get();
+    const pass = selectedPass ?? nextPass;
+    const now = getAdjustedTime();
 
-    if (nextPass) {
-      if (now < nextPass.aosTime) {
+    if (pass) {
+      if (now < pass.aosTime) {
         usePassesStore.setState({
-          nextTime: formatTimer(nextPass.aosTime - now),
+          nextTime: formatTimer(pass.aosTime - now),
           isNextTimeAos: true,
         });
-      } else if (now < nextPass.losTime) {
+      } else if (now < pass.losTime) {
         usePassesStore.setState({
-          nextTime: formatTimer(nextPass.losTime - now),
+          nextTime: formatTimer(pass.losTime - now),
           isNextTimeAos: false,
         });
       }
@@ -179,7 +187,14 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
     // Update progress for active passes (functional update to avoid races)
     usePassesStore.setState((state) => {
       let changed = false;
-      const updated = state.itemsList.map((p) => {
+      const filtered = state.itemsList.filter((p) => {
+        if (p.losTime <= now) {
+          changed = true;
+          return false; // remove ended passes
+        }
+        return true;
+      });
+      const updated = filtered.map((p) => {
         if (now >= p.aosTime && now <= p.losTime) {
           const newProg = (now - p.aosTime) / (p.losTime - p.aosTime);
           if (Math.abs(newProg - p.progress) > 0.001) {
@@ -187,13 +202,26 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
             return { ...p, progress: newProg };
           }
         } else if (p.progress !== 0) {
-          // Pass not active — reset progress to 0 so bar disappears
           changed = true;
           return { ...p, progress: 0 };
         }
         return p;
       });
-      return changed ? { itemsList: updated } : {};
+
+      // If selectedPass or nextPass was removed, find the next one
+      let { selectedPass, nextPass } = state;
+      if (selectedPass && selectedPass.losTime <= now) {
+        selectedPass = updated.find((p) => p.aosTime > now) || updated[0] || null;
+        changed = true;
+      }
+      if (nextPass && nextPass.losTime <= now) {
+        nextPass = updated.find((p) => p.aosTime > now) || updated[0] || null;
+        changed = true;
+      }
+
+      return changed
+        ? { itemsList: updated, groupedPasses: groupPassesByDate(updated), selectedPass, nextPass }
+        : {};
     });
   },
 
@@ -208,6 +236,18 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
     }));
     set({ shouldSeeWhatsNew: false });
   },
+
+  selectPass: (catNum: number) => {
+    const { itemsList } = get();
+    const now = getAdjustedTime();
+    const pass = itemsList
+      .filter((p) => p.catNum === catNum)
+      .sort((a, b) => a.aosTime - b.aosTime)
+      .find((p) => p.aosTime > now) || itemsList.find((p) => p.catNum === catNum) || null;
+    set({ selectedPass: pass });
+  },
+
+  resetSelectedPass: () => set({ selectedPass: null }),
 
   filterPasses: (hours, elevation, showDeepSpace) =>
     set({ hours, elevation, showDeepSpace }),
