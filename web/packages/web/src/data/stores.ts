@@ -54,7 +54,7 @@ const DEFAULT_DATA_SOURCES: DataSourcesSettings = {
   useCustomTLE: false,
   useCustomTransceivers: false,
   tleUrl: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=csv',
-  transceiversUrl: '/api/satnogs/api/transmitters/?format=json',
+  transceiversUrl: 'https://db.satnogs.org/api/transmitters/?format=json',
 };
 
 const DEFAULT_RADIO_CONTROL: RadioControlSettings = {

@@ -281,10 +281,15 @@ export async function fetchAndStoreSatelliteData(
 
 export async function fetchTransceivers(url?: string): Promise<SatRadio[]> {
   let finalUrl = url || useSettingsStore.getState().dataSourcesSettings.transceiversUrl;
-  // Fix old persisted GitHub URL that no longer works
+  // Fix old persisted URLs that no longer work
   if (finalUrl.includes('raw.githubusercontent.com')) {
-    finalUrl = '/api/satnogs/api/transmitters/?format=json';
+    finalUrl = 'https://db.satnogs.org/api/transmitters/?format=json';
   }
+  if (finalUrl.startsWith('/api/satnogs')) {
+    finalUrl = 'https://db.satnogs.org/api/transmitters/?format=json';
+  }
+  // Use proxy in dev mode, direct URL in production
+  finalUrl = celestrakUrl(finalUrl);
   try {
     const response = await fetch(finalUrl);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
