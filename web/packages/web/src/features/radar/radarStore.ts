@@ -348,27 +348,60 @@ function startCompassSensor() {
   if (sensorActive) return;
   sensorActive = true;
 
+  if (!window.isSecureContext) {
+    // Sensor APIs AND legacy deviceorientation both require HTTPS on modern browsers.
+    // Don't start anything — avoid pointless deprecated-API usage that can't work.
+    console.warn('[compass] Requires a secure context (HTTPS). Compass unavailable on HTTP.');
+    sensorActive = false;
+    return;
+  }
+
   // Try modern Sensor API first
   if (typeof AbsoluteOrientationSensor !== 'undefined') {
-    try {
-      sensor = new AbsoluteOrientationSensor({ frequency: 30 });
-      sensor.addEventListener('reading', () => {
-        if (!sensor?.quaternion) return;
-        const q = sensor.quaternion;
-        // Convert quaternion to Euler angles (yaw = compass heading from true north)
-        const heading = quaternionToHeading(q[0], q[1], q[2], q[3]);
-        useRadarStore.setState({ orientationValues: [heading, 0] });
-      });
-      sensor.addEventListener('error', () => {
-        // Fall back to legacy API
+    // Chrome requires permission for accelerometer/gyroscope/magnetometer
+    const requestSensor = () => {
+      try {
+        sensor = new AbsoluteOrientationSensor({ frequency: 30 });
+        sensor.addEventListener('reading', () => {
+          if (!sensor?.quaternion) return;
+          const q = sensor.quaternion;
+          const heading = quaternionToHeading(q[0], q[1], q[2], q[3]);
+          useRadarStore.setState({ orientationValues: [heading, 0] });
+        });
+        sensor.addEventListener('error', () => {
+          stopCompassSensor();
+          startLegacyCompass();
+        });
+        sensor.start();
+      } catch (e) {
+        console.warn('[compass] AbsoluteOrientationSensor failed to start:', e);
         stopCompassSensor();
         startLegacyCompass();
-      });
-      sensor.start();
-      return;
-    } catch {
-      // Sensor API not available, fall back
-    }
+      }
+    };
+
+    // Request sensor permissions if the Permissions API supports them
+    const names = ['accelerometer', 'gyroscope', 'magnetometer'] as const;
+    const queryPermissions = names.map(
+      (name) => (navigator as any).permissions?.query?.({ name }).catch(() => null),
+    );
+    Promise.all(queryPermissions).then((results) => {
+      const allGranted = results.every((r) => !r || r.state === 'granted');
+      if (allGranted) {
+        requestSensor();
+      } else if ((navigator as any).permissions) {
+        // Ask for each pending permission, then start
+        Promise.all(
+          results.map((r) => {
+            if (!r || r.state === 'granted' || r.state === 'denied') return Promise.resolve(r);
+            return r.request?.() ?? Promise.resolve(r);
+          }),
+        ).finally(() => requestSensor());
+      } else {
+        requestSensor();
+      }
+    });
+    return;
   }
 
   // Fall back to legacy DeviceOrientationEvent
@@ -378,7 +411,7 @@ function startCompassSensor() {
 function stopCompassSensor() {
   sensorActive = false;
   if (sensor) {
-    sensor.stop();
+    try { sensor.stop(); } catch { /* noop */ }
     sensor = null;
   }
   window.removeEventListener('deviceorientation', handleOrientation);
@@ -389,6 +422,9 @@ function startLegacyCompass() {
   if ('DeviceOrientationEvent' in window) {
     window.addEventListener('deviceorientation', handleOrientation);
     window.addEventListener('deviceorientationabsolute', handleOrientation as any);
+    console.log('[compass] Using legacy deviceorientation events');
+  } else {
+    console.warn('[compass] No orientation API available on this device.');
   }
 }
 

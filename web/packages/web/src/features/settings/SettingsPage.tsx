@@ -9,6 +9,7 @@ export function SettingsPage() {
   const store = useSettingsStore();
   const { otherSettings, stationPosition, databaseState } = store;
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
+  const [gpsMsg, setGpsMsg] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [manualLat, setManualLat] = useState(stationPosition.latitude.toString());
   const [manualLon, setManualLon] = useState(stationPosition.longitude.toString());
@@ -106,21 +107,48 @@ export function SettingsPage() {
           <button
             className={styles.btn}
             onClick={() => {
-              if ('geolocation' in navigator) {
-                navigator.geolocation.getCurrentPosition(
-                  (pos) =>
-                    store.setStationPosition({
-                      latitude: pos.coords.latitude,
-                      longitude: pos.coords.longitude,
-                      altitude: pos.coords.altitude ?? 0,
-                    }),
-                  (err) => console.warn('Geolocation error:', err),
-                );
+              if (!('geolocation' in navigator)) {
+                setGpsMsg('Geolocation is not supported on this device/browser.');
+                return;
               }
+              if (!window.isSecureContext) {
+                setGpsMsg('Geolocation requires a secure context (HTTPS or localhost). Open the site over HTTPS.');
+                return;
+              }
+              setGpsMsg('Getting GPS position...');
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  store.setStationPosition({
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude,
+                    altitude: pos.coords.altitude ?? 0,
+                  });
+                  setManualLat(pos.coords.latitude.toFixed(6));
+                  setManualLon(pos.coords.longitude.toFixed(6));
+                  setManualAlt(String(Math.round(pos.coords.altitude ?? 0)));
+                  setGpsMsg(
+                    `Position set: ${pos.coords.latitude.toFixed(4)}°, ${pos.coords.longitude.toFixed(4)}°`,
+                  );
+                },
+                (err) => {
+                  const reasons: Record<number, string> = {
+                    1: 'Permission denied. Enable location access for this site in your browser settings.',
+                    2: 'Position unavailable. Try enabling GPS/Wi-Fi or moving to a clearer area.',
+                    3: 'Timed out getting a fix. Try again.',
+                  };
+                  setGpsMsg(`GPS error: ${reasons[err.code] ?? err.message}`);
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
+              );
             }}
           >
             📍 Get GPS Position
           </button>
+          {gpsMsg && (
+            <div className={styles.updateMsg} style={{ marginTop: 8 }}>
+              {gpsMsg}
+            </div>
+          )}
           <div className={styles.manualPos}>
             <span className={styles.manualPosLabel}>Or enter manually:</span>
             <div className={styles.manualPosRow}>
