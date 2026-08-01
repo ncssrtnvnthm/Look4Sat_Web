@@ -1,29 +1,29 @@
 :root {
   /* ── Dark graphite theme ── */
-  --color-surface: #1a1a1a;
-  --color-surface-container: #242424;
-  --color-surface-container-high: #2e2e2e;
-  --color-primary: #90a4ae;
-  --color-on-surface: #e0e0e0;
-  --color-on-surface-variant: #9e9e9e;
-  --color-outline: #3d3d3d;
-  --color-error: #cf6679;
+  --color-surface: #121212;
+  --color-surface-container: #1c1c1e;
+  --color-surface-container-high: #2a2a2e;
+  --color-primary: #b0c4cc;
+  --color-on-surface: #f5f5f5;
+  --color-on-surface-variant: #b8b8b8;
+  --color-outline: #4d4d4d;
+  --color-error: #ff7b96;
   --color-satellite: #4fc3f7;
   --color-satellite-track: rgba(79, 195, 247, 0.4);
   --color-sun: #ffb74d;
-  --color-moon: #bdbdbd;
-  --color-aos: #66bb6a;
-  --color-los: #ef5350;
+  --color-moon: #d0d0d0;
+  --color-aos: #81c784;
+  --color-los: #ff6b6b;
 }
 
 [data-theme='light'] {
-  --color-surface: #f5f5f5;
+  --color-surface: #fafafa;
   --color-surface-container: #ffffff;
-  --color-surface-container-high: #e8e8e8;
-  --color-primary: #37474f;
-  --color-on-surface: #212121;
-  --color-on-surface-variant: #616161;
-  --color-outline: #bdbdbd;
+  --color-surface-container-high: #e2e2e2;
+  --color-primary: #263238;
+  --color-on-surface: #0d0d0d;
+  --color-on-surface-variant: #444444;
+  --color-outline: #8f8f8f;
 }
 
 *,
