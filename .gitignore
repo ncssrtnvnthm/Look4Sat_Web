@@ -1,1 +1,27 @@
-﻿node_modules/
+﻿# Gradle
+.gradle/
+build/
+build-logic/.gradle/
+build-logic/build/
+
+# Kotlin/JS & WASM build output
+web/.gradle/
+web/build/
+web/packages/domain/build/
+web/kotlin-js-store/
+
+# Node
+node_modules/
+web/packages/web/node_modules/
+web/packages/web/dist/
+
+# Web build artifacts (copied at CI time)
+web/packages/web/public/wasm/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
