@@ -161,7 +161,7 @@ export function parseTLE(text: string): OrbitalData[] {
       const orbitalPeriod = 1440 / meanmo;
 
       results.push({
-        name: lines[i].trim(),
+        name: lines[i].trim().replace(/^0 /, ''),
         epoch: parseFloat(line1.substring(18, 32)),
         meanmo,
         eccn: parseFloat(line2.substring(26, 33)) / 1e7,
