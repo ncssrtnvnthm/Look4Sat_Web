@@ -7,6 +7,7 @@
   "homepage": "https://ncssrtnvnthm.github.io/Look4Sat_Web/",
   "scripts": {
     "dev": "vite",
+    "dev:https": "VITE_HTTPS=1 vite --host 0.0.0.0 --port 3443",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
@@ -26,6 +27,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-react": "^4.4.1",
     "typescript": "~5.8.3",
     "vite": "^6.3.2",

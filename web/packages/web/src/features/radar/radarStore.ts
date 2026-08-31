@@ -14,6 +14,8 @@ interface RadarState {
   satTrack: OrbitalPos[];
   shouldShowSweep: boolean;
   shouldUseCompass: boolean;
+  /** User-facing explanation when the compass can't run (insecure context, permission, no sensor). */
+  compassMessage: string | null;
   sunPosition: SunPosition | null;
   moonPosition: MoonPosition | null;
   _orbitalDataJson: string | null;
@@ -73,6 +75,7 @@ export const useRadarStore = create<RadarState>()((set, get) => ({
   satTrack: [],
   shouldShowSweep: true,
   shouldUseCompass: false,
+  compassMessage: null,
   sunPosition: null,
   moonPosition: null,
   _orbitalDataJson: null,
@@ -106,9 +109,18 @@ export const useRadarStore = create<RadarState>()((set, get) => ({
       });
     }
 
-    // Compass — start modern sensor or legacy listener
+    // Compass — start modern sensor or legacy listener.
+    // On iOS (requestPermission API present), sensor access can only be granted
+    // from a user gesture, so we don't auto-start here — the button tap enables it.
+    const needsUserGesture =
+      typeof (DeviceOrientationEvent as unknown as { requestPermission?: unknown })?.requestPermission === 'function';
     if (settings.otherSettings.stateOfSensors) {
-      startCompassSensor();
+      if (needsUserGesture) {
+        set({ shouldUseCompass: false });
+        setCompassMessage('Tap the "Compass" button to enable the compass (iOS requires a tap to grant sensor access).');
+      } else {
+        startCompassSensor();
+      }
     }
 
     // Start the tick loop (self-scheduling, no race conditions)
@@ -143,6 +155,9 @@ export const useRadarStore = create<RadarState>()((set, get) => ({
       }
       if (granted) {
         startCompassSensor();
+        setCompassMessage(null);
+      } else {
+        setCompassMessage('Compass permission denied. Enable Motion & Orientation access for this site in iOS Settings.');
       }
       set({ shouldUseCompass: granted });
       if (granted) {
@@ -151,6 +166,7 @@ export const useRadarStore = create<RadarState>()((set, get) => ({
     } else {
       set({ shouldUseCompass: false });
       stopCompassSensor();
+      setCompassMessage(null);
       useSettingsStore.getState().updateOtherSettings((s) => ({ ...s, stateOfSensors: false }));
     }
   },
@@ -335,6 +351,10 @@ function get(): RadarState {
   return useRadarStore.getState();
 }
 
+function setCompassMessage(message: string | null) {
+  useRadarStore.setState({ compassMessage: message });
+}
+
 // ── Compass sensor system ──
 
 let sensor: AbsoluteOrientationSensor | null = null;
@@ -348,6 +368,8 @@ function startCompassSensor() {
     // Sensor APIs AND legacy deviceorientation both require HTTPS on modern browsers.
     // Don't start anything — avoid pointless deprecated-API usage that can't work.
     console.warn('[compass] Requires a secure context (HTTPS). Compass unavailable on HTTP.');
+    setCompassMessage('Compass requires a secure context (HTTPS). Open the site over HTTPS to use it.');
+    useRadarStore.setState({ shouldUseCompass: false });
     sensorActive = false;
     return;
   }
@@ -421,6 +443,8 @@ function startLegacyCompass() {
     console.log('[compass] Using legacy deviceorientation events');
   } else {
     console.warn('[compass] No orientation API available on this device.');
+    setCompassMessage('No orientation sensor available on this device.');
+    useRadarStore.setState({ shouldUseCompass: false });
   }
 }
 

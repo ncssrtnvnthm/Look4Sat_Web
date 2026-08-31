@@ -99,6 +99,10 @@ export function RadarPage() {
         </div>
       )}
 
+      {store.compassMessage && (
+        <div className={styles.compassMsg}>{store.compassMessage}</div>
+      )}
+
       <div className={styles.bottomContent}>
         {/* Info cards — always visible */}
         <div className={styles.infoCards}>

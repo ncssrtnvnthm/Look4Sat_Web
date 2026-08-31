@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
 import { celestrakProxy } from './celestrakProxy';
@@ -9,6 +10,9 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     celestrakProxy(),
+    // Self-signed HTTPS for LAN testing (npm run dev:https) — needed for
+    // geolocation/orientation sensors, which require a secure context.
+    ...(process.env.VITE_HTTPS === '1' ? [basicSsl()] : []),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],

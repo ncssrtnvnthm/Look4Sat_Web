@@ -112,3 +112,13 @@
   border-radius: 12px;
   font-size: 14px;
 }
+
+.compassMsg {
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-on-surface-variant);
+  background: var(--color-surface-container-high);
+  border-radius: 8px;
+}
