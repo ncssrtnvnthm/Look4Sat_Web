@@ -7,7 +7,8 @@ const DEG_TO_RAD = Math.PI / 180;
 const CIRCLES = 3;
 const STROKE_WIDTH = 2;
 const SWEEP_DURATION_MS = 8000;
-const ELEVATION_RINGS = [30, 60, 90];
+/** Elevation of each ring from the center outwards: 60°, 30°, horizon (0°). */
+const RING_ELEVATIONS = [60, 30, 0];
 
 interface RadarViewProps {
   satellitePos: OrbitalPos | null;
@@ -33,8 +34,9 @@ export function RadarView({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animFrameRef = useRef<number>(0);
   const sweepAngleRef = useRef(0);
+  const lastFrameRef = useRef(0);
 
-  const draw = useCallback(() => {
+  const draw = useCallback((frameTime: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -76,7 +78,7 @@ export function RadarView({
       ctx.stroke();
 
       // Elevation labels
-      const elev = ELEVATION_RINGS[i - 1];
+      const elev = RING_ELEVATIONS[i - 1];
       ctx.fillStyle = 'rgba(160, 160, 176, 0.6)';
       ctx.font = `${10 * dpr}px sans-serif`;
       ctx.textAlign = 'right';
@@ -111,10 +113,13 @@ export function RadarView({
       ctx.fillText(label, lx, ly);
     }
 
-    // ── Sweep line animation ──
+    // ── Sweep line animation (time-based, frame-rate independent) ──
     if (shouldShowSweep) {
+      if (lastFrameRef.current === 0) lastFrameRef.current = frameTime;
+      const dt = frameTime - lastFrameRef.current;
+      lastFrameRef.current = frameTime;
       sweepAngleRef.current =
-        (sweepAngleRef.current + (360 * 16) / SWEEP_DURATION_MS) % 360;
+        (sweepAngleRef.current + (360 * dt) / SWEEP_DURATION_MS) % 360;
       const sweepRad = (sweepAngleRef.current - 90) * DEG_TO_RAD;
       ctx.strokeStyle = 'rgba(79, 195, 247, 0.25)';
       ctx.lineWidth = 1.5 * dpr;
@@ -125,6 +130,8 @@ export function RadarView({
         centerY + radius * Math.sin(sweepRad),
       );
       ctx.stroke();
+    } else {
+      lastFrameRef.current = 0;
     }
 
     // ── Satellite track ──
@@ -135,7 +142,7 @@ export function RadarView({
       let firstPoint = true;
       for (const pos of track) {
         const azRad = (pos.azimuth - 90) * DEG_TO_RAD;
-        const dist = ((90 - pos.elevation) / 90) * radius;
+        const dist = Math.min(((90 - pos.elevation) / 90) * radius, radius);
         const px = centerX + dist * Math.cos(azRad);
         const py = centerY + dist * Math.sin(azRad);
         if (firstPoint) {
@@ -203,10 +210,16 @@ export function RadarView({
     }
 
     ctx.restore();
-    animFrameRef.current = requestAnimationFrame(draw);
+
+    // Keep animating only while the sweep rotates; otherwise a single
+    // static frame is redrawn whenever props change (draw re-created).
+    if (shouldShowSweep) {
+      animFrameRef.current = requestAnimationFrame(draw);
+    }
   }, [satellitePos, track, compassAzimuth, compassElevation, shouldShowSweep, shouldUseCompass, sunPosition, moonPosition]);
 
   useEffect(() => {
+    lastFrameRef.current = 0;
     animFrameRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animFrameRef.current);
   }, [draw]);

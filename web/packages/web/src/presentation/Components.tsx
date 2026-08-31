@@ -62,28 +62,20 @@ export function SwipeableItem({
   onClick?: () => void;
 }) {
   return (
-    <div className={styles.swipeableItem} onClick={onClick} role="button" tabIndex={0}>
+    <div
+      className={styles.swipeableItem}
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (onClick && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+    >
       {children}
     </div>
   );
 }
 
-// ── Next pass row (used in radar footer) ──
-
-export function NextPassRow({
-  name,
-  aosTime,
-  maxElevation,
-}: {
-  name: string;
-  aosTime: string;
-  maxElevation: number;
-}) {
-  return (
-    <div className={styles.nextPassRow}>
-      <span className={styles.nextPassName}>{name}</span>
-      <span className={styles.nextPassTime}>{aosTime}</span>
-      <span className={styles.nextPassElev}>{maxElevation.toFixed(0)}°</span>
-    </div>
-  );
-}

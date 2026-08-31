@@ -50,12 +50,12 @@ data download.
 ./gradlew test
 ```
 
-- **Min SDK**: 24 | **Target SDK**: 36 | **JDK**: 17
+- **Min SDK**: 24 | **Compile SDK**: 37 (targetSdk defaults to compileSdk) | **JDK**: 21
 - **Gradle**: Uses version catalog (`gradle/libs.versions.toml`) + convention plugins in `build-logic/`
 
 ## Key Libraries
 
-- **Compose** (BOM 2026.05.01) + Material3 Adaptive
+- **Compose** (BOM 2026.06.00) + Material3 Adaptive
 - **Navigation3** (type-safe, uses `@Serializable` NavKeys)
 - **Room** (KSP code generation) for local satellite/TLE storage
 - **OkHttp** 5.x for TLE downloads

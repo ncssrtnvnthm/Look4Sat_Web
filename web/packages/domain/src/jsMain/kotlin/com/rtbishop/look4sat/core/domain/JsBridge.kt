@@ -69,6 +69,15 @@ data class WasmPass(
 @Serializable
 data class WasmPassList(val passes: List<WasmPass>)
 
+@Serializable
+data class WasmTrackPoint(
+    val latitude: Double,
+    val longitude: Double,
+)
+
+@Serializable
+data class WasmTrackList(val points: List<WasmTrackPoint>)
+
 // ── Shared JSON instance ──
 
 private val bridgeJson = Json {
@@ -196,6 +205,10 @@ fun look4satCalculatePasses(
     val obj = getOrCreateObject(jsonOrbitalData) ?: return """{"passes":[]}"""
     val pos = GeoPos(lat, lon, alt)
 
+    // Skip satellites that can never rise above the observer's horizon
+    // (matches the Android app's willBeSeen() optimization).
+    if (!obj.willBeSeen(pos)) return """{"passes":[]}"""
+
     // Convert minElevation from degrees (passed by TS) to radians (used internally)
     val minElevRad = minElevation * DEG2RAD
 
@@ -245,4 +258,49 @@ fun look4satCalculatePasses(
     }
 
     return bridgeJson.encodeToString(WasmPassList(passes))
+}
+
+/**
+ * Compute a ground-track sample list for a satellite over a time window.
+ * Batched into a single call so the frontend doesn't do thousands of
+ * JSON round-trips per track.
+ * @param jsonOrbitalData JSON-serialized [OrbitalData]
+ * @param lat Observer latitude (degrees)
+ * @param lon Observer longitude (degrees)
+ * @param alt Observer altitude (meters)
+ * @param startTimeMs Unix epoch milliseconds
+ * @param endTimeMs Unix epoch milliseconds (exclusive)
+ * @param stepMs Sampling interval in milliseconds
+ * @return JSON-serialized [WasmTrackList] of sub-satellite points
+ */
+@JsExport
+fun look4satGetTrack(
+    jsonOrbitalData: String,
+    lat: Double,
+    lon: Double,
+    alt: Double,
+    startTimeMs: Double,
+    endTimeMs: Double,
+    stepMs: Double,
+): String {
+    val obj = getOrCreateObject(jsonOrbitalData) ?: return """{"points":[]}"""
+    val pos = GeoPos(lat, lon, alt)
+
+    val step = if (stepMs > 0.0) stepMs.toLong() else 15000L
+    val points = mutableListOf<WasmTrackPoint>()
+    var t = startTimeMs.toLong()
+    // Hard cap to protect the UI thread from pathological windows (e.g. GEO).
+    val maxSamples = 10000
+    while (t < endTimeMs.toLong() && points.size < maxSamples) {
+        val fp = obj.getFullPosition(pos, t)
+        points.add(
+            WasmTrackPoint(
+                latitude = (fp.latitude * RAD2DEG).sanitize(),
+                longitude = (fp.longitude * RAD2DEG).sanitize(),
+            )
+        )
+        t += step
+    }
+
+    return bridgeJson.encodeToString(WasmTrackList(points))
 }

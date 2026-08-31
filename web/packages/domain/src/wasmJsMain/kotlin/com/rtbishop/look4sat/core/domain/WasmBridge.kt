@@ -1,15 +1,18 @@
 /*
  * Look4Sat Web — Wasm/JS bridge for SGP4/SDP4 orbital propagation.
  * Exports thin wrappers around core:domain predict functions.
+ * NOTE: kept in sync with JsBridge.kt (jsMain); units are converted to degrees here.
  */
 @file:OptIn(kotlin.js.ExperimentalJsExport::class)
 
 package com.rtbishop.look4sat.core.domain
 
 import com.rtbishop.look4sat.core.domain.predict.CelestialComputer
+import com.rtbishop.look4sat.core.domain.predict.DEG2RAD
 import com.rtbishop.look4sat.core.domain.predict.GeoPos
 import com.rtbishop.look4sat.core.domain.predict.OrbitalData
 import com.rtbishop.look4sat.core.domain.predict.OrbitalObject
+import com.rtbishop.look4sat.core.domain.predict.RAD2DEG
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -40,12 +43,16 @@ data class WasmOrbitalPos(
 data class WasmSunPosition(
     val azimuth: Double,
     val elevation: Double,
+    val latitude: Double,
+    val longitude: Double,
 )
 
 @Serializable
 data class WasmMoonPosition(
     val azimuth: Double,
     val elevation: Double,
+    val latitude: Double,
+    val longitude: Double,
 )
 
 @Serializable
@@ -65,11 +72,27 @@ data class WasmPass(
 @Serializable
 data class WasmPassList(val passes: List<WasmPass>)
 
+@Serializable
+data class WasmTrackPoint(
+    val latitude: Double,
+    val longitude: Double,
+)
+
+@Serializable
+data class WasmTrackList(val points: List<WasmTrackPoint>)
+
 // ── Shared JSON instance ──
 
 private val bridgeJson = Json {
     ignoreUnknownKeys = true
     coerceInputValues = true
+    allowSpecialFloatingPointValues = true // SGP4 may produce NaN/Infinity
+}
+
+private fun Double.sanitize(): Double = when {
+    this.isNaN() -> 0.0
+    this.isInfinite() -> if (this > 0) 1e300 else -1e300
+    else -> this
 }
 
 // ── Cached OrbitalObject to avoid re-parsing on every tick ──
@@ -114,45 +137,55 @@ fun look4satGetPosition(
     val pos = GeoPos(lat, lon, alt)
     val orbitalPos = obj.getPosition(pos, timeMs)
     val result = WasmOrbitalPos(
-        azimuth = orbitalPos.azimuth,
-        elevation = orbitalPos.elevation,
-        latitude = orbitalPos.latitude,
-        longitude = orbitalPos.longitude,
-        altitude = orbitalPos.altitude,
-        distance = orbitalPos.distance,
-        distanceRate = orbitalPos.distanceRate,
-        theta = orbitalPos.theta,
+        azimuth = (orbitalPos.azimuth * RAD2DEG).sanitize(),
+        elevation = (orbitalPos.elevation * RAD2DEG).sanitize(),
+        latitude = (orbitalPos.latitude * RAD2DEG).sanitize(),
+        longitude = (orbitalPos.longitude * RAD2DEG).sanitize(),
+        altitude = orbitalPos.altitude.sanitize(),
+        distance = orbitalPos.distance.sanitize(),
+        distanceRate = orbitalPos.distanceRate.sanitize(),
+        theta = orbitalPos.theta.sanitize(),
         time = orbitalPos.time,
-        phase = orbitalPos.phase,
-        eclipseDepth = orbitalPos.eclipseDepth,
+        phase = orbitalPos.phase.sanitize(),
+        eclipseDepth = orbitalPos.eclipseDepth.sanitize(),
         eclipsed = orbitalPos.eclipsed,
         aboveHorizon = orbitalPos.aboveHorizon,
-        orbitalVelocity = orbitalPos.getOrbitalVelocity(),
+        orbitalVelocity = orbitalPos.getOrbitalVelocity().sanitize(),
         downlinkFreq = 0L,
         uplinkFreq = 0L,
     )
     return bridgeJson.encodeToString(result)
 }
 
-/** Check if satellite is visible from observer. */
-@JsExport
-fun look4satWillBeSeen(jsonOrbitalData: String, lat: Double, lon: Double): Boolean {
-    val obj = getOrCreateObject(jsonOrbitalData) ?: return false
-    return obj.willBeSeen(GeoPos(lat, lon, 0.0))
-}
-
 /** Get Sun position for observer at time. */
 @JsExport
 fun look4satGetSunPosition(lat: Double, lon: Double, timeMs: Long): String {
     val pos = CelestialComputer.getSunPosition(GeoPos(lat, lon, 0.0), timeMs)
-    return bridgeJson.encodeToString(WasmSunPosition(pos.azimuth, pos.elevation))
+    return bridgeJson.encodeToString(
+        WasmSunPosition(
+            azimuth = pos.azimuth.sanitize(),
+            elevation = pos.elevation.sanitize(),
+            latitude = pos.latitude.sanitize(),
+            longitude = pos.longitude.sanitize(),
+        )
+    )
 }
 
 /** Get Moon position for observer at time. */
 @JsExport
 fun look4satGetMoonPosition(lat: Double, lon: Double, timeMs: Long): String {
     val pos = CelestialComputer.getMoonPosition(GeoPos(lat, lon, 0.0), timeMs)
-    return bridgeJson.encodeToString(WasmMoonPosition(pos.azimuth, pos.elevation))
+    // Moon returns GHA (Greenwich Hour Angle) and declination.
+    // Convert GHA (degrees west from Greenwich, 0..360) to longitude (-180..+180 east).
+    val moonLon = if (pos.gha > 180.0) 360.0 - pos.gha else -pos.gha
+    return bridgeJson.encodeToString(
+        WasmMoonPosition(
+            azimuth = pos.azimuth.sanitize(),
+            elevation = pos.elevation.sanitize(),
+            latitude = pos.declination.sanitize(),
+            longitude = moonLon.sanitize(),
+        )
+    )
 }
 
 /**
@@ -172,6 +205,13 @@ fun look4satCalculatePasses(
     val obj = getOrCreateObject(jsonOrbitalData) ?: return """{"passes":[]}"""
     val pos = GeoPos(lat, lon, alt)
 
+    // Skip satellites that can never rise above the observer's horizon
+    // (matches the Android app's willBeSeen() optimization).
+    if (!obj.willBeSeen(pos)) return """{"passes":[]}"""
+
+    // Convert minElevation from degrees (passed by TS) to radians (used internally)
+    val minElevRad = minElevation * DEG2RAD
+
     // Brute-force pass search: sample every 15 seconds, look for horizon crossings
     val stepMs = 15000L
     val passes = mutableListOf<WasmPass>()
@@ -182,9 +222,9 @@ fun look4satCalculatePasses(
 
     var t = startTimeMs
     while (t <= endTimeMs) {
-        val elev = obj.getElevation(pos, t)
+        val elev = obj.getElevation(pos, t).sanitize()
 
-        if (!inPass && elev > minElevation) {
+        if (!inPass && elev > minElevRad) {
             // AOS — get full position for azimuth
             inPass = true
             aosTime = t
@@ -193,17 +233,17 @@ fun look4satCalculatePasses(
             maxElev = elev
         } else if (inPass) {
             if (elev > maxElev) maxElev = elev
-            if (elev < minElevation) {
+            if (elev < minElevRad) {
                 // LOS — get full position for azimuth
                 val fp = obj.getFullPosition(pos, t)
                 passes.add(
                     WasmPass(
                         aosTime = aosTime,
-                        aosAzimuth = aosAz,
+                        aosAzimuth = (aosAz * RAD2DEG).sanitize(),
                         losTime = t,
-                        losAzimuth = fp.azimuth,
+                        losAzimuth = (fp.azimuth * RAD2DEG).sanitize(),
                         altitude = fp.altitude.toInt(),
-                        maxElevation = maxElev,
+                        maxElevation = (maxElev * RAD2DEG).sanitize(),
                         catNum = obj.data.catnum,
                         name = obj.data.name,
                         isDeepSpace = obj.data.isDeepSpace,
@@ -218,4 +258,41 @@ fun look4satCalculatePasses(
     }
 
     return bridgeJson.encodeToString(WasmPassList(passes))
+}
+
+/**
+ * Compute a ground-track sample list for a satellite over a time window.
+ * Batched into a single call so the frontend doesn't do thousands of
+ * JSON round-trips per track.
+ */
+@JsExport
+fun look4satGetTrack(
+    jsonOrbitalData: String,
+    lat: Double,
+    lon: Double,
+    alt: Double,
+    startTimeMs: Long,
+    endTimeMs: Long,
+    stepMs: Long,
+): String {
+    val obj = getOrCreateObject(jsonOrbitalData) ?: return """{"points":[]}"""
+    val pos = GeoPos(lat, lon, alt)
+
+    val step = if (stepMs > 0L) stepMs else 15000L
+    val points = mutableListOf<WasmTrackPoint>()
+    var t = startTimeMs
+    // Hard cap to protect the UI thread from pathological windows (e.g. GEO).
+    val maxSamples = 10000
+    while (t < endTimeMs && points.size < maxSamples) {
+        val fp = obj.getFullPosition(pos, t)
+        points.add(
+            WasmTrackPoint(
+                latitude = (fp.latitude * RAD2DEG).sanitize(),
+                longitude = (fp.longitude * RAD2DEG).sanitize(),
+            )
+        )
+        t += step
+    }
+
+    return bridgeJson.encodeToString(WasmTrackList(points))
 }

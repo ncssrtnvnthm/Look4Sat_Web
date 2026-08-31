@@ -81,7 +81,14 @@
   border-radius: 8px;
 }
 
-.progressBar {
+.refreshProgressSection {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.refreshProgressBar {
   flex: 1;
   height: 6px;
   background: var(--color-surface-container-high);
@@ -89,7 +96,7 @@
   overflow: hidden;
 }
 
-.progressFill {
+.refreshProgressFill {
   height: 100%;
   background: var(--color-primary);
   border-radius: 3px;

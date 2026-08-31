@@ -42,11 +42,27 @@ jobs:
         run: ./gradlew :packages:domain:jsBrowserProductionWebpack
 
       - name: Copy domain.js to public
-        run: cp web/packages/domain/build/kotlin-webpack/js/productionExecutable/domain.js web/packages/web/public/wasm/domain.js
+        run: |
+          mkdir -p web/packages/web/public/wasm
+          cp web/packages/domain/build/kotlin-webpack/js/productionExecutable/domain.js web/packages/web/public/wasm/domain.js
 
       - name: Install web dependencies
         working-directory: web/packages/web
         run: npm ci
+
+      - name: Type-check web app
+        working-directory: web/packages/web
+        run: npm run typecheck
+
+      # SatNOGS has no CORS headers, so bundle a fresh snapshot of the
+      # transceiver database at deploy time (the app falls back to it in
+      # production; see satelliteData.ts fetchTransceivers).
+      - name: Bundle SatNOGS transceivers snapshot
+        run: |
+          mkdir -p web/packages/web/public/data
+          curl -fsSL -A "Look4Sat/4.4.3" \
+            "https://db.satnogs.org/api/transmitters/?format=json" \
+            -o web/packages/web/public/data/transceivers.json || echo "snapshot download failed"
 
       - name: Build web app
         working-directory: web/packages/web

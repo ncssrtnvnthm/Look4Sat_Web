@@ -89,34 +89,3 @@
 .swipeableItem:active {
   background: var(--color-surface-container-high);
 }
-
-/* NextPassRow */
-.nextPassRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--color-surface-container);
-  border-radius: 8px;
-}
-
-.nextPassName {
-  flex: 1;
-  font-size: 14px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.nextPassTime {
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-primary);
-}
-
-.nextPassElev {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-aos);
-}

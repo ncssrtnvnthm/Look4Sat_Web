@@ -3,13 +3,13 @@ import type { OrbitalPass } from '../../domain/types';
 import { useSettingsStore, useSelectedStore, getAdjustedTime } from '../../data/stores';
 import { getEntriesWithIds } from '../../data/database';
 import { calculatePasses } from '../../domain/wasmBridge';
+import { formatTimer } from '../../lib/time';
 
 const CHUNK_SIZE = 8;   // satellites per chunk — keep UI responsive
 const YIELD_MS = 1;     // yield to event loop between chunks
 
 interface PassesState {
   isPassesDialogShown: boolean;
-  isRadiosDialogShown: boolean;
   isRefreshing: boolean;
   nextPass: OrbitalPass | null;
   selectedPass: OrbitalPass | null;
@@ -18,11 +18,8 @@ interface PassesState {
   hours: number;
   elevation: number;
   showDeepSpace: boolean;
-  modes: string[];
   itemsList: OrbitalPass[];
-  groupedPasses: Record<string, OrbitalPass[]>;
   shouldSeeWhatsNew: boolean;
-  sunTimes: Record<string, [string, string]>;
   /** Pass calculation progress — processed satellite count */
   calcProgress: number;
   calcTotal: number;
@@ -34,135 +31,135 @@ interface PassesState {
   selectPass: (catNum: number) => void;
   resetSelectedPass: () => void;
   filterPasses: (hours: number, elevation: number, showDeepSpace: boolean) => void;
-  filterRadios: (modes: string[]) => void;
   togglePassesDialog: () => void;
-  toggleRadiosDialog: () => void;
 }
 
-// Abort handle for cancelling an in-flight refresh
-let refreshAbort = false;
+// Monotonic token invalidating in-flight refreshes when cancelled or restarted.
+let refreshToken = 0;
 
 export const usePassesStore = create<PassesState>()((set, get) => ({
   isPassesDialogShown: false,
-  isRadiosDialogShown: false,
   isRefreshing: true,
   nextPass: null,
   selectedPass: null,
-  nextTime: '00:00:00',
+  nextTime: '--:--:--',
   isNextTimeAos: true,
   hours: 12,
   elevation: 16,
   showDeepSpace: true,
-  modes: [],
   itemsList: [],
-  groupedPasses: {},
   shouldSeeWhatsNew: false,
-  sunTimes: {},
   calcProgress: 0,
   calcTotal: 0,
 
   refreshPasses: async () => {
-    refreshAbort = false;
+    const token = ++refreshToken;
     set({ isRefreshing: true, calcProgress: 0, calcTotal: 0 });
 
-    const settings = useSettingsStore.getState();
-    set({
-      shouldSeeWhatsNew: settings.otherSettings.shouldSeeWhatsNew,
-    });
+    try {
+      const settings = useSettingsStore.getState();
+      set({ shouldSeeWhatsNew: settings.otherSettings.shouldSeeWhatsNew });
 
-    const selectedIds = useSelectedStore.getState().selectedIds;
-    if (selectedIds.length === 0) {
-      set({ isRefreshing: false, itemsList: [], groupedPasses: {} });
-      return;
-    }
+      const selectedIds = useSelectedStore.getState().selectedIds;
+      if (selectedIds.length === 0) {
+        if (token === refreshToken) {
+          set({ isRefreshing: false, itemsList: [], nextPass: null });
+        }
+        return;
+      }
 
-    const entries = await getEntriesWithIds(selectedIds);
-    const { latitude, longitude, altitude } = settings.stationPosition;
-    const { hours: hoursAhead, elevation: minElevation, showDeepSpace } = get();
-    const now = getAdjustedTime();
-    const endTime = now + hoursAhead * 3600000;
+      const entries = await getEntriesWithIds(selectedIds);
+      if (token !== refreshToken) return;
+      const { latitude, longitude, altitude } = settings.stationPosition;
+      const { hours: hoursAhead, elevation: minElevation, showDeepSpace } = get();
+      const now = getAdjustedTime();
+      const endTime = now + hoursAhead * 3600000;
 
-    // Filter entries
-    const toProcess = showDeepSpace
-      ? entries
-      : entries.filter((e) => !e.isDeepSpace);
+      // Filter entries
+      const toProcess = showDeepSpace
+        ? entries
+        : entries.filter((e) => !e.isDeepSpace);
 
-    const total = toProcess.length;
-    set({ calcTotal: total });
+      const total = toProcess.length;
+      set({ calcTotal: total });
 
-    const allPasses: OrbitalPass[] = [];
+      const allPasses: OrbitalPass[] = [];
 
-    // Process in chunks, yielding to the event loop between chunks
-    for (let i = 0; i < total; i += CHUNK_SIZE) {
-      if (refreshAbort) break;
+      // Process in chunks, yielding to the event loop between chunks
+      for (let i = 0; i < total; i += CHUNK_SIZE) {
+        if (token !== refreshToken) break;
 
-      const chunk = toProcess.slice(i, i + CHUNK_SIZE);
-      const results = await Promise.allSettled(
-        chunk.map((entry) =>
-          calculatePasses(
-            JSON.stringify(entry),
-            latitude, longitude, altitude,
-            now, endTime, minElevation,
+        const chunk = toProcess.slice(i, i + CHUNK_SIZE);
+        const results = await Promise.allSettled(
+          chunk.map((entry) =>
+            calculatePasses(
+              JSON.stringify(entry),
+              latitude, longitude, altitude,
+              now, endTime, minElevation,
+            ),
           ),
-        ),
-      );
+        );
+        if (token !== refreshToken) return;
 
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value.type === 'calculatePasses') {
-          for (const wp of result.value.result) {
-            allPasses.push({
-              aosTime: wp.aosTime,
-              aosAzimuth: wp.aosAzimuth,
-              losTime: wp.losTime,
-              losAzimuth: wp.losAzimuth,
-              altitude: wp.altitude,
-              maxElevation: wp.maxElevation,
-              catNum: wp.catNum,
-              name: wp.name,
-              isDeepSpace: wp.isDeepSpace,
-              progress: 0,
-              hasDecayed: wp.hasDecayed,
-            });
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value.type === 'calculatePasses') {
+            for (const wp of result.value.result) {
+              allPasses.push({
+                aosTime: wp.aosTime,
+                aosAzimuth: wp.aosAzimuth,
+                losTime: wp.losTime,
+                losAzimuth: wp.losAzimuth,
+                altitude: wp.altitude,
+                maxElevation: wp.maxElevation,
+                catNum: wp.catNum,
+                name: wp.name,
+                isDeepSpace: wp.isDeepSpace,
+                progress: 0,
+                hasDecayed: wp.hasDecayed,
+              });
+            }
           }
+        }
+
+        // Update progress and yield to event loop
+        set({ calcProgress: Math.min(i + CHUNK_SIZE, total) });
+
+        if (i + CHUNK_SIZE < total) {
+          await new Promise((r) => setTimeout(r, YIELD_MS));
         }
       }
 
-      // Update progress and yield to event loop
-      set({ calcProgress: Math.min(i + CHUNK_SIZE, total) });
-
-      if (i + CHUNK_SIZE < total) {
-        await new Promise((r) => setTimeout(r, YIELD_MS));
+      if (token !== refreshToken) {
+        set({ isRefreshing: false });
+        return;
       }
-    }
 
-    if (refreshAbort) {
-      set({ isRefreshing: false });
-      return;
-    }
+      allPasses.sort((a, b) => a.aosTime - b.aosTime);
 
-    allPasses.sort((a, b) => a.aosTime - b.aosTime);
+      // Remove already-ended passes
+      const upcomingPasses = allPasses.filter((p) => p.losTime > now);
 
-    // Remove already-ended passes
-    const upcomingPasses = allPasses.filter((p) => p.losTime > now);
-
-    for (const pass of upcomingPasses) {
-      if (now >= pass.aosTime && now <= pass.losTime) {
-        pass.progress = (now - pass.aosTime) / (pass.losTime - pass.aosTime);
+      for (const pass of upcomingPasses) {
+        if (now >= pass.aosTime && now <= pass.losTime) {
+          pass.progress = (now - pass.aosTime) / (pass.losTime - pass.aosTime);
+        }
       }
+
+      const nextPass = upcomingPasses.find((p) => p.aosTime > now) || upcomingPasses[0] || null;
+
+      set({
+        isRefreshing: false,
+        itemsList: upcomingPasses,
+        nextPass,
+        calcProgress: total,
+      });
+
+      // Trigger initial timer update
+      get().tickTimers();
+    } catch (err) {
+      console.error('Failed to refresh passes:', err);
+      if (token === refreshToken) set({ isRefreshing: false });
     }
-
-    const nextPass = upcomingPasses.find((p) => p.aosTime > now) || upcomingPasses[0] || null;
-
-    set({
-      isRefreshing: false,
-      itemsList: upcomingPasses,
-      groupedPasses: groupPassesByDate(upcomingPasses),
-      nextPass,
-      calcProgress: total,
-    });
-
-    // Trigger initial timer update
-    get().tickTimers();
   },
 
   tickTimers: () => {
@@ -182,6 +179,8 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
           isNextTimeAos: false,
         });
       }
+    } else {
+      usePassesStore.setState({ nextTime: '--:--:--', isNextTimeAos: true });
     }
 
     // Update progress for active passes (functional update to avoid races)
@@ -220,13 +219,13 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
       }
 
       return changed
-        ? { itemsList: updated, groupedPasses: groupPassesByDate(updated), selectedPass, nextPass }
+        ? { itemsList: updated, selectedPass, nextPass }
         : {};
     });
   },
 
   cancelRefresh: () => {
-    refreshAbort = true;
+    refreshToken++;
   },
 
   dismissWhatsNew: () => {
@@ -243,55 +242,25 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
     const pass = itemsList
       .filter((p) => p.catNum === catNum)
       .sort((a, b) => a.aosTime - b.aosTime)
-      .find((p) => p.aosTime > now) || itemsList.find((p) => p.catNum === catNum) || null;
+      .find((p) => p.aosTime > now)
+      || itemsList.find((p) => p.catNum === catNum && p.losTime > now)
+      || null;
     set({ selectedPass: pass });
   },
 
   resetSelectedPass: () => set({ selectedPass: null }),
 
-  filterPasses: (hours, elevation, showDeepSpace) =>
-    set({ hours, elevation, showDeepSpace }),
-
-  filterRadios: (modes) => set({ modes }),
+  filterPasses: (hours, elevation, showDeepSpace) => {
+    set({ hours, elevation, showDeepSpace });
+    // Persist so other features (radar) share the same pass filters.
+    useSettingsStore.getState().setPassesSettings({
+      ...useSettingsStore.getState().passesSettings,
+      hoursAhead: hours,
+      minElevation: elevation,
+      showDeepSpace,
+    });
+  },
 
   togglePassesDialog: () =>
     set((s) => ({ isPassesDialogShown: !s.isPassesDialogShown })),
-
-  toggleRadiosDialog: () =>
-    set((s) => ({ isRadiosDialogShown: !s.isRadiosDialogShown })),
 }));
-
-// ── Format helpers ──
-
-function formatTimer(ms: number): string {
-  const abs = Math.abs(ms);
-  const h = Math.floor(abs / 3600000);
-  const m = Math.floor((abs % 3600000) / 60000);
-  const s = Math.floor((abs % 60000) / 1000);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
-export function formatPassTime(ms: number, isUtc: boolean): string {
-  const date = new Date(ms);
-  return isUtc
-    ? date.toISOString().substring(11, 19)
-    : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-}
-
-export function formatDate(ms: number): string {
-  return new Date(ms).toLocaleDateString([], {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-export function groupPassesByDate(passes: OrbitalPass[]): Record<string, OrbitalPass[]> {
-  const groups: Record<string, OrbitalPass[]> = {};
-  for (const pass of passes) {
-    const key = formatDate(pass.aosTime);
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(pass);
-  }
-  return groups;
-}

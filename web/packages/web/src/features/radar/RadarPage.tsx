@@ -2,11 +2,8 @@ import { useEffect } from 'react';
 import { RadarView } from './RadarView';
 import { TopBar, TimerRow, IconCard } from '../../presentation/Components';
 import { useRadarStore } from './radarStore';
+import { noradUrl } from '../../lib/noradUrl';
 import styles from './RadarPage.module.css';
-
-function noradUrl(catNum: number) {
-  return `https://www.n2yo.com/satellite/?s=${catNum}`;
-}
 
 /** Format Hz to MHz with 3 decimal places. */
 function formatMHz(hz: number | null | undefined): string {
@@ -95,6 +92,12 @@ export function RadarPage() {
           moonPosition={moonPosition}
         />
       </div>
+
+      {sats.length === 0 && (
+        <div className={styles.emptyState}>
+          No satellites selected. Go to the Satellites page, choose what to track, and save.
+        </div>
+      )}
 
       <div className={styles.bottomContent}>
         {/* Info cards — always visible */}

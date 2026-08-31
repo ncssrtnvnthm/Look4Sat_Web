@@ -1,18 +1,13 @@
 import { create } from 'zustand';
-import type { OrbitalPass, GeoPos, OrbitalPos, OrbitalData } from '../../domain/types';
+import type { GeoPos, OrbitalData } from '../../domain/types';
 import { useSettingsStore, useSelectedStore, getAdjustedTime } from '../../data/stores';
 import { getEntriesWithIds } from '../../data/database';
-import { getPosition, getSunPosition, getMoonPosition } from '../../domain/wasmBridge';
+import { getPosition, getSunPosition, getMoonPosition, getTrack } from '../../domain/wasmBridge';
 
 interface MapState {
   selectedSat: OrbitalData | null;
-  selectedPass: OrbitalPass | null;
-  stationPosition: GeoPos;
   /** Ground track segments (split at dateline). Each segment is [lat, lng][] */
   trackSegments: [number, number][][];
-  footprint: OrbitalPos | null;
-  isUtc: boolean;
-  isLightUi: boolean;
   allSatellites: OrbitalData[];
   sunLat: number;
   sunLon: number;
@@ -23,6 +18,7 @@ interface MapState {
   satLon: number | null;
   satAlt: number | null;
   _ticking: boolean;
+  _lastSunMoonUpdate: number;
 
   initMap: () => Promise<void>;
   startTicking: () => void;
@@ -34,22 +30,18 @@ interface MapState {
 
 export const useMapStore = create<MapState>()((set, get) => ({
   selectedSat: null,
-  selectedPass: null,
-  stationPosition: { latitude: 0, longitude: 0, altitude: 0 },
   trackSegments: [],
-  footprint: null,
-  isUtc: false,
-  isLightUi: false,
   allSatellites: [],
-  sunLat: 0,
-  sunLon: 0,
-  moonLat: 0,
-  moonLon: 0,
+  sunLat: NaN,
+  sunLon: NaN,
+  moonLat: NaN,
+  moonLon: NaN,
   selectedIndex: 0,
   satLat: null,
   satLon: null,
   satAlt: null,
   _ticking: false,
+  _lastSunMoonUpdate: 0,
 
   initMap: async () => {
     const settings = useSettingsStore.getState();
@@ -61,9 +53,6 @@ export const useMapStore = create<MapState>()((set, get) => ({
     }
 
     set({
-      stationPosition: settings.stationPosition,
-      isUtc: settings.otherSettings.stateOfUtc,
-      isLightUi: settings.otherSettings.stateOfLightTheme,
       allSatellites,
       selectedSat: allSatellites[0] || null,
       selectedIndex: 0,
@@ -97,7 +86,7 @@ export const useMapStore = create<MapState>()((set, get) => ({
     const sat = allSatellites[idx];
     set({ selectedIndex: idx, selectedSat: sat });
     useSelectedStore.getState().setViewedSatIndex(idx);
-    computeTrack(sat, get().stationPosition);
+    computeTrack(sat, useSettingsStore.getState().stationPosition);
   },
 
   selectNext: () => {
@@ -107,7 +96,7 @@ export const useMapStore = create<MapState>()((set, get) => ({
     const sat = allSatellites[idx];
     set({ selectedIndex: idx, selectedSat: sat });
     useSelectedStore.getState().setViewedSatIndex(idx);
-    computeTrack(sat, get().stationPosition);
+    computeTrack(sat, useSettingsStore.getState().stationPosition);
   },
 
   selectSatellite: (index: number) => {
@@ -116,22 +105,21 @@ export const useMapStore = create<MapState>()((set, get) => ({
     const sat = allSatellites[index];
     set({ selectedIndex: index, selectedSat: sat });
     useSelectedStore.getState().setViewedSatIndex(index);
-    computeTrack(sat, get().stationPosition);
+    computeTrack(sat, useSettingsStore.getState().stationPosition);
   },
 }));
 
-let mapTickTimer: ReturnType<typeof setTimeout> | null = null;
-
 function scheduleMapTick() {
-  mapTickTimer = setTimeout(() => runMapTick(), 1000);
+  setTimeout(() => runMapTick(), 1000);
 }
 
 async function runMapTick() {
   const state = useMapStore.getState();
   if (!state._ticking) return;
 
-  const { selectedSat, stationPosition, satLat } = state;
-  if (selectedSat && stationPosition.latitude !== 0) {
+  const { selectedSat } = state;
+  const stationPosition = useSettingsStore.getState().stationPosition;
+  if (selectedSat && (stationPosition.latitude !== 0 || stationPosition.longitude !== 0)) {
     try {
       const resp = await getPosition(
         JSON.stringify(selectedSat),
@@ -154,23 +142,28 @@ async function runMapTick() {
   }
 
   // Update sun/moon every 60s
-  if ((Date.now() / 1000 | 0) % 60 === 0) {
+  if (Date.now() - state._lastSunMoonUpdate > 60000) {
+    useMapStore.setState({ _lastSunMoonUpdate: Date.now() });
     updateSunMoon();
   }
 
   scheduleMapTick();
 }
 
+// Guards against out-of-order track results when switching satellites quickly.
+let trackToken = 0;
+
 /**
  * Compute ground track for the selected satellite, ported from
  * Android MapViewModel.getSatTrack().
  *
- * Samples positions every 15 seconds for the next ~2.4 orbital periods,
- * splitting the track at ±180° longitude crossings.
+ * The bridge computes the samples in one call (batched), then the
+ * result is split into segments at ±180° longitude crossings.
  */
-async function computeTrack(sat: OrbitalData, pos: GeoPos) {
+async function computeTrack(sat: OrbitalData, pos: GeoPos, attempt = 0) {
   // Don't compute if position is not set
   if (pos.latitude === 0 && pos.longitude === 0) return;
+  const token = ++trackToken;
 
   const orbitalDataJson = JSON.stringify(sat);
   const now = getAdjustedTime();
@@ -178,82 +171,71 @@ async function computeTrack(sat: OrbitalData, pos: GeoPos) {
   const endTime = now + durationMs;
   const stepMs = 15000; // 15-second steps matching Android
 
+  const resp = await getTrack(orbitalDataJson, pos.latitude, pos.longitude, pos.altitude, now, endTime, stepMs);
+  if (token !== trackToken) return; // superseded by a newer selection
+
+  if (resp.type !== 'getTrack') {
+    // Bridge not loaded yet — retry a few times if still the current satellite
+    if (attempt < 5) {
+      setTimeout(() => {
+        if (trackToken === token) computeTrack(sat, pos, attempt + 1);
+      }, 2000);
+    }
+    return;
+  }
+
   const segments: [number, number][][] = [];
   let currentSegment: [number, number][] = [];
   let prevLon: number | null = null;
-  let successCount = 0;
 
-  for (let t = now; t <= endTime; t += stepMs) {
-    try {
-      const resp = await getPosition(
-        orbitalDataJson, pos.latitude, pos.longitude, pos.altitude, t,
-      );
-      if (resp.type !== 'getPosition' || !resp.result) continue;
-      successCount++;
+  for (const p of resp.result) {
+    let lon = p.longitude;
+    while (lon > 180) lon -= 360;
+    while (lon < -180) lon += 360;
+    const lat = p.latitude;
 
-      let lon = resp.result.longitude;
-      while (lon > 180) lon -= 360;
-      while (lon < -180) lon += 360;
-      const lat = resp.result.latitude;
-
-      // Dateline crossing detection (matches Android logic)
-      if (prevLon !== null) {
-        if (prevLon < -170 && lon > 170) {
-          currentSegment.push([lat, -180]);
-          segments.push(currentSegment);
-          currentSegment = [[lat, 180]];
-        } else if (prevLon > 170 && lon < -170) {
-          currentSegment.push([lat, 180]);
-          segments.push(currentSegment);
-          currentSegment = [[lat, -180]];
-        }
+    // Dateline crossing detection (matches Android logic)
+    if (prevLon !== null) {
+      if (prevLon < -170 && lon > 170) {
+        currentSegment.push([lat, -180]);
+        segments.push(currentSegment);
+        currentSegment = [[lat, 180]];
+      } else if (prevLon > 170 && lon < -170) {
+        currentSegment.push([lat, 180]);
+        segments.push(currentSegment);
+        currentSegment = [[lat, -180]];
       }
-
-      currentSegment.push([lat, lon]);
-      prevLon = lon;
-    } catch {
-      // Skip failed position fetches
     }
+
+    currentSegment.push([lat, lon]);
+    prevLon = lon;
   }
 
   if (currentSegment.length > 0) {
     segments.push(currentSegment);
   }
 
-  // If all fetches failed (bridge not loaded yet), retry after delay
-  if (successCount === 0) {
-    setTimeout(() => {
-      const state = useMapStore.getState();
-      if (state.selectedSat?.catnum === sat.catnum) {
-        computeTrack(sat, pos);
-      }
-    }, 2000);
-    return;
-  }
-
+  if (token !== trackToken) return;
   useMapStore.setState({ trackSegments: segments });
 }
 
 async function updateSunMoon() {
   try {
-    const store = useMapStore.getState();
-    const { latitude, longitude } = store.stationPosition;
+    const { latitude, longitude } = useSettingsStore.getState().stationPosition;
     const now = getAdjustedTime();
     const [sunResp, moonResp] = await Promise.all([
       getSunPosition(latitude, longitude, now),
       getMoonPosition(latitude, longitude, now),
     ]);
+    const updates: Partial<MapState> = {};
     if (sunResp.type === 'getSunPosition') {
-      useMapStore.setState({
-        sunLat: sunResp.result.latitude,
-        sunLon: sunResp.result.longitude,
-      });
+      updates.sunLat = sunResp.result.latitude;
+      updates.sunLon = sunResp.result.longitude;
     }
     if (moonResp.type === 'getMoonPosition') {
-      useMapStore.setState({
-        moonLat: moonResp.result.latitude,
-        moonLon: moonResp.result.longitude,
-      });
+      updates.moonLat = moonResp.result.latitude;
+      updates.moonLon = moonResp.result.longitude;
     }
+    if (Object.keys(updates).length > 0) useMapStore.setState(updates);
   } catch { /* ignore */ }
 }

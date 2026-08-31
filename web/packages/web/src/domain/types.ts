@@ -95,26 +95,7 @@ export interface PassesSettings {
   selectedModes: string[];
 }
 
-export interface RCSettings {
-  rotatorState: boolean;
-  rotatorAddress: string;
-  rotatorPort: string;
-  rotatorFormat: string;
-  frequencyState: boolean;
-  frequencyAddress: string;
-  frequencyPort: string;
-  frequencyFormat: string;
-  bluetoothRotatorState: boolean;
-  bluetoothRotatorFormat: string;
-  bluetoothRotatorName: string;
-  bluetoothRotatorAddress: string;
-  bluetoothFrequencyState: boolean;
-  bluetoothFrequencyFormat: string;
-  bluetoothFrequencyAddress: string;
-}
-
 export interface OtherSettings {
-  stateOfAutoUpdate: boolean;
   stateOfSensors: boolean;
   stateOfSweep: boolean;
   stateOfUtc: boolean;
@@ -122,26 +103,12 @@ export interface OtherSettings {
   stateOfNightMode: boolean;
   shouldSeeWarning: boolean;
   shouldSeeWhatsNew: boolean;
-  sstvMode: string;
   /** Time offset in minutes. Negative = past, positive = future. 0 = real-time. */
   timeOffsetMinutes: number;
 }
 
 export interface DataSourcesSettings {
-  useCustomTLE: boolean;
-  useCustomTransceivers: boolean;
-  tleUrl: string;
   transceiversUrl: string;
-}
-
-export interface RadioControlSettings {
-  enabled: boolean;
-  radioModel: string;
-  txRadioAddress: string;
-  rxRadioAddress: string;
-  txRadioName: string;
-  rxRadioName: string;
-  baudRate: number;
 }
 
 // ── Celestial positions ──
@@ -154,12 +121,5 @@ export interface SunPosition {
 export interface MoonPosition {
   azimuth: number;
   elevation: number;
-  phase: number;
 }
 
-// ── SSTV ──
-
-export interface SstvFrame {
-  imageData: ImageData | null;
-  modeName: string;
-}

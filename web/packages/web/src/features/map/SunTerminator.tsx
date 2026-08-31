@@ -69,18 +69,20 @@ function buildNightPolygon(
     points.push([lat, lng]);
   }
 
-  // Build polygon: terminator + wrap along invisible map edge
+  // Build polygon: terminator + wrap along the map edge.
+  // ±89.9° (not ±90°) keeps the polygon near the pole without
+  // leaving a visible unshaded sliver at the map's edge.
   const poly: [number, number][] = [];
   if (nightIsSouth) {
     for (const p of points) poly.push([p[0], p[1]]);
-    poly.push([-85, lngOffset + 180]);
-    poly.push([-85, lngOffset - 180]);
+    poly.push([-89.9, lngOffset + 180]);
+    poly.push([-89.9, lngOffset - 180]);
   } else {
     for (let i = points.length - 1; i >= 0; i--) {
       poly.push([points[i][0], points[i][1]]);
     }
-    poly.push([85, lngOffset - 180]);
-    poly.push([85, lngOffset + 180]);
+    poly.push([89.9, lngOffset - 180]);
+    poly.push([89.9, lngOffset + 180]);
   }
 
   return poly;

@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { TopBar } from '../../presentation/Components';
 import { useMapStore } from './mapStore';
 import { useSettingsStore } from '../../data/stores';
 import { SunTerminator } from './SunTerminator';
+import { noradUrl } from '../../lib/noradUrl';
 import styles from './MapPage.module.css';
 import 'leaflet/dist/leaflet.css';
 
@@ -53,6 +54,15 @@ function StationClickHandler({
   return null;
 }
 
+/** Keep the map centered on the station whenever it changes (react-leaflet's center prop is initial-only). */
+function MapCenterSync({ center }: { center: [number, number] }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, map.getZoom());
+  }, [map, center[0], center[1]]);
+  return null;
+}
+
 export function MapPage() {
   const store = useMapStore();
   const { selectedSat, sunLat, sunLon, moonLat, moonLon, allSatellites, selectedIndex, satLat, satLon } = store;
@@ -63,7 +73,9 @@ export function MapPage() {
 
   const handleSetPosition = useCallback(
     (lat: number, lon: number) => {
-      setStationPosition({ latitude: lat, longitude: lon, altitude: 0 });
+      // Preserve the configured altitude — only the lat/lon are picked from the map.
+      const altitude = useSettingsStore.getState().stationPosition.altitude;
+      setStationPosition({ latitude: lat, longitude: lon, altitude });
       setPinning(false);
     },
     [setStationPosition],
@@ -78,28 +90,14 @@ export function MapPage() {
     return () => store.stopTicking();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Force Leaflet to recalculate size after mount
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const container = document.querySelector('.leaflet-container') as HTMLElement | null;
-      if (container) {
-        container.style.display = 'none';
-        void container.offsetHeight;
-        container.style.display = '';
-      }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
-
   const station: [number, number] = [stationPosition.latitude, stationPosition.longitude];
-  const center: [number, number] = selectedSat
-    ? [stationPosition.latitude, stationPosition.longitude]
-    : [20, 0];
+  const positionSet = stationPosition.latitude !== 0 || stationPosition.longitude !== 0;
+  const center: [number, number] = positionSet ? station : [20, 0];
 
-  const tileUrl = lightTheme
-    ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-  const tileAttr = '&copy; <a href="https://carto.com/">CARTO</a> | <a href="https://www.openstreetmap.org/copyright">OSM</a>';
+  // OSM standard tiles — free, no API key required (CARTO basemaps now require one).
+  // Dark theme is achieved with a CSS invert filter on the tile pane (see MapPage.module.css).
+  const tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const tileAttr = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
   return (
     <div className={`${styles.page} ${pinning ? styles.pinning : ''}`}>
@@ -117,11 +115,23 @@ export function MapPage() {
 
       {allSatellites.length > 1 && (
         <div className={styles.satToolbar}>
-          <button className={styles.actionBtn} onClick={store.selectPrev}>◀</button>
+          <button
+            className={styles.actionBtn}
+            onClick={store.selectPrev}
+            aria-label="Previous satellite"
+          >
+            ◀
+          </button>
           <span className={styles.satIndex}>
             {selectedIndex + 1}/{allSatellites.length}
           </span>
-          <button className={styles.actionBtn} onClick={store.selectNext}>▶</button>
+          <button
+            className={styles.actionBtn}
+            onClick={store.selectNext}
+            aria-label="Next satellite"
+          >
+            ▶
+          </button>
           <select
             className={styles.satSelect}
             value={selectedIndex}
@@ -140,12 +150,12 @@ export function MapPage() {
         <MapContainer
           center={center}
           zoom={3}
-          className={styles.map}
+          className={`${styles.map} ${lightTheme ? '' : styles.mapDark}`}
           zoomControl={true}
           attributionControl={true}
         >
+          <MapCenterSync center={center} />
           <TileLayer
-            key={lightTheme ? 'light' : 'dark'}
             attribution={tileAttr}
             url={tileUrl}
           />
@@ -193,7 +203,7 @@ export function MapPage() {
               <Marker position={[satLat, satLon]} icon={satIcon}>
                 <Popup>
                   🛰️ {selectedSat.name}<br />
-                  NORAD: <a href={`https://www.n2yo.com/satellite/?s=${selectedSat.catnum}`} target="_blank" rel="noopener noreferrer">#{selectedSat.catnum}</a><br />
+                  NORAD: <a href={noradUrl(selectedSat.catnum)} target="_blank" rel="noopener noreferrer">#{selectedSat.catnum}</a><br />
                   Alt: {store.satAlt?.toFixed(0) ?? '?'} km
                 </Popup>
               </Marker>
@@ -212,7 +222,7 @@ export function MapPage() {
         <div className={styles.satInfo}>
           <span>🛰️ {selectedSat.name}</span>
           <a
-            href={`https://www.n2yo.com/satellite/?s=${selectedSat.catnum}`}
+            href={noradUrl(selectedSat.catnum)}
             target="_blank"
             rel="noopener noreferrer"
             className={styles.noradLink}

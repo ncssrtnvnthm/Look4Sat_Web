@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TopBar } from '../../presentation/Components';
 import { useSettingsStore } from '../../data/stores';
-import { fetchAndStoreSatelliteData, fetchTransceivers, SATELLITE_DATA_URLS } from '../../data/satelliteData';
+import { fetchAndStoreSatelliteData, fetchTransceivers, fetchAndTagCategories, SATELLITE_DATA_URLS } from '../../data/satelliteData';
 import { db } from '../../data/database';
 import styles from './SettingsPage.module.css';
 
@@ -36,13 +36,19 @@ export function SettingsPage() {
     try {
       // Step 1: Download all active satellites (bulk orbital data)
       const allResult = await fetchAndStoreSatelliteData();
+      if (allResult.errors.length > 0) {
+        setUpdateMsg(`Update finished with ${allResult.errors.length} error(s): ${allResult.errors[0]}`);
+        setUpdating(false);
+        return;
+      }
       if (allResult.inserted === 0 && !allResult.upToDate) {
         setUpdateMsg('No new satellites found.');
         setUpdating(false);
         return;
       }
 
-      // Step 2: Fetch each Celestrak category to tag satellites with their groups.
+      // Step 2: Tag satellites with their Celestrak groups, downloading in
+      // parallel and skipping groups that are already tagged.
       // Skip "All", "Other", and non-Celestrak sources (Amsat, Classified, McCants, R4UAB).
       const celestrakCategories = Object.entries(SATELLITE_DATA_URLS).filter(
         ([key, url]) =>
@@ -52,20 +58,13 @@ export function SettingsPage() {
           url !== '',
       );
 
-      let tagged = 0;
-      for (let i = 0; i < celestrakCategories.length; i++) {
-        const [cat, url] = celestrakCategories[i];
-        setUpdateMsg(`Tagging ${cat} (${i + 1}/${celestrakCategories.length})...`);
-        try {
-          const result = await fetchAndStoreSatelliteData([url], cat);
-          if (result.inserted > 0) tagged += result.inserted;
-        } catch {
-          // Skip categories that fail (rate limits, etc.)
-        }
-      }
+      const tagResult = await fetchAndTagCategories(celestrakCategories, 4, (done, total, current) => {
+        setUpdateMsg(`Tagging satellites (${done}/${total})… ${current}`);
+      });
 
       setUpdateMsg(
-        `${allResult.inserted} satellites updated, ${tagged} category tags applied from ${celestrakCategories.length} groups.`,
+        `${allResult.inserted} satellites updated, ${tagResult.tagged} category tags applied` +
+          ` (${tagResult.skipped} already tagged, ${tagResult.errors} group fetch(es) failed).`,
       );
     } catch {
       setUpdateMsg('Update failed. Check console.');
@@ -182,9 +181,16 @@ export function SettingsPage() {
                   const lat = parseFloat(manualLat);
                   const lon = parseFloat(manualLon);
                   const alt = parseFloat(manualAlt) || 0;
-                  if (!isNaN(lat) && !isNaN(lon)) {
-                    store.setStationPosition({ latitude: lat, longitude: lon, altitude: alt });
+                  if (isNaN(lat) || isNaN(lon)) {
+                    setGpsMsg('Enter valid numeric latitude and longitude.');
+                    return;
                   }
+                  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+                    setGpsMsg('Latitude must be between -90 and 90, longitude between -180 and 180.');
+                    return;
+                  }
+                  store.setStationPosition({ latitude: lat, longitude: lon, altitude: alt });
+                  setGpsMsg(null);
                 }}
               >
                 Set
@@ -231,7 +237,7 @@ export function SettingsPage() {
           <div className={styles.categoryButtons}>
             <span className={styles.categoryLabel}>Celestrak groups:</span>
             {Object.entries(SATELLITE_DATA_URLS)
-              .filter(([key, url]) => url.includes('celestrak.org'))
+              .filter(([, url]) => url.includes('celestrak.org'))
               .map(([cat, url]) => (
                 <button
                   key={cat}
@@ -240,11 +246,11 @@ export function SettingsPage() {
                   onClick={async () => {
                     setUpdating(true);
                     setUpdateMsg(null);
-                    try {
-                      const result = await fetchAndStoreSatelliteData([url], cat);
+                    const result = await fetchAndStoreSatelliteData([url], cat);
+                    if (result.errors.length > 0) {
+                      setUpdateMsg(`${cat}: ${result.errors[0]}`);
+                    } else {
                       setUpdateMsg(`${cat}: ${result.message}`);
-                    } catch (e: any) {
-                      setUpdateMsg(`${cat}: ${e.message}`);
                     }
                     setUpdating(false);
                   }}
@@ -260,7 +266,6 @@ export function SettingsPage() {
           <h3 className={styles.sectionTitle}>Preferences</h3>
           {[
             { label: 'UTC Time', key: 'stateOfUtc' as const },
-            { label: 'Auto-update data', key: 'stateOfAutoUpdate' as const },
             { label: 'Radar sweep', key: 'stateOfSweep' as const },
             { label: 'Use compass', key: 'stateOfSensors' as const },
             { label: 'Light theme', key: 'stateOfLightTheme' as const },

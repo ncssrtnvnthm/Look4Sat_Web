@@ -102,3 +102,13 @@
   background: var(--color-surface-container-high);
   font-size: 11px;
 }
+
+.emptyState {
+  margin: 16px;
+  padding: 16px;
+  text-align: center;
+  color: var(--color-on-surface-variant);
+  background: var(--color-surface-container);
+  border-radius: 12px;
+  font-size: 14px;
+}

@@ -3,12 +3,12 @@ import type { OrbitalPass, OrbitalPos, OrbitalData, SunPosition, MoonPosition, S
 import { useSettingsStore, useSelectedStore, getAdjustedTime } from '../../data/stores';
 import { getEntriesWithIds, getRadiosWithId } from '../../data/database';
 import { getPosition, getSunPosition, getMoonPosition, calculatePasses } from '../../domain/wasmBridge';
+import { formatTimer } from '../../lib/time';
 
 interface RadarState {
   currentPass: OrbitalPass | null;
   currentTime: string;
   isTimeAos: boolean;
-  isUtc: boolean;
   orientationValues: [number, number];
   orbitalPos: OrbitalPos | null;
   satTrack: OrbitalPos[];
@@ -31,14 +31,6 @@ interface RadarState {
   selectSatellite: (index: number) => void;
 }
 
-function formatTimer(ms: number): string {
-  const abs = Math.abs(ms);
-  const h = Math.floor(abs / 3600000);
-  const m = Math.floor((abs % 3600000) / 60000);
-  const s = Math.floor((abs % 60000) / 1000);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
 /** Calculate real passes for one satellite using the SGP4 bridge. */
 async function fetchPasses(
   orbitalDataJson: string,
@@ -46,8 +38,8 @@ async function fetchPasses(
 ): Promise<OrbitalPass[]> {
   const settings = useSettingsStore.getState();
   const now = getAdjustedTime();
-  const hoursAhead = settings.passesSettings.hoursAhead || 12;
-  const minElevation = settings.passesSettings.minElevation || 10;
+  const hoursAhead = settings.passesSettings.hoursAhead;
+  const minElevation = settings.passesSettings.minElevation;
   const endTime = now + hoursAhead * 3600000;
 
   const resp = await calculatePasses(
@@ -74,9 +66,8 @@ async function fetchPasses(
 
 export const useRadarStore = create<RadarState>()((set, get) => ({
   currentPass: null,
-  currentTime: '00:00:00',
+  currentTime: '--:--:--',
   isTimeAos: true,
-  isUtc: false,
   orientationValues: [0, 0],
   orbitalPos: null,
   satTrack: [],
@@ -99,7 +90,6 @@ export const useRadarStore = create<RadarState>()((set, get) => ({
 
     const settings = useSettingsStore.getState();
     set({
-      isUtc: settings.otherSettings.stateOfUtc,
       shouldShowSweep: settings.otherSettings.stateOfSweep,
       shouldUseCompass: settings.otherSettings.stateOfSensors,
     });
@@ -130,7 +120,11 @@ export const useRadarStore = create<RadarState>()((set, get) => ({
     stopCompassSensor();
   },
 
-  toggleSweep: () => set((s) => ({ shouldShowSweep: !s.shouldShowSweep })),
+  toggleSweep: () => {
+    const next = !get().shouldShowSweep;
+    set({ shouldShowSweep: next });
+    useSettingsStore.getState().updateOtherSettings((s) => ({ ...s, stateOfSweep: next }));
+  },
   toggleCompass: async () => {
     const next = !get().shouldUseCompass;
     if (next) {
@@ -151,9 +145,13 @@ export const useRadarStore = create<RadarState>()((set, get) => ({
         startCompassSensor();
       }
       set({ shouldUseCompass: granted });
+      if (granted) {
+        useSettingsStore.getState().updateOtherSettings((s) => ({ ...s, stateOfSensors: true }));
+      }
     } else {
       set({ shouldUseCompass: false });
       stopCompassSensor();
+      useSettingsStore.getState().updateOtherSettings((s) => ({ ...s, stateOfSensors: false }));
     }
   },
 
@@ -220,10 +218,8 @@ async function selectAndLoadSat(sat: OrbitalData) {
 
 // ── Self-scheduling tick loop (avoids setInterval race conditions) ──
 
-let tickTimer: ReturnType<typeof setTimeout> | null = null;
-
 function scheduleTick() {
-  tickTimer = setTimeout(() => runTick(), 1000);
+  setTimeout(() => runTick(), 1000);
 }
 
 async function runTick() {
@@ -472,12 +468,12 @@ function computeMagDeclination(lat: number, lon: number): number {
   const g20 = -2500.0, g21 = 2982.0, h21 = -2991.0, g22 = 1676.8, h22 = -734.8;
   const g30 = 1363.9, g31 = -2381.0, h31 = -82.3, g32 = 1236.2, h32 = 241.8, g33 = 525.7, h33 = -542.9;
 
-  const p10 = sinPhi, dp10 = cosPhi;
+  const dp10 = cosPhi;
   const p11 = cosPhi, dp11 = -sinPhi;
-  const p20 = 1.5 * sinPhi * sinPhi - 0.5, dp20 = 3.0 * sinPhi * cosPhi;
+  const dp20 = 3.0 * sinPhi * cosPhi;
   const p21 = 3.0 * sinPhi * cosPhi, dp21 = 3.0 * (cosPhi * cosPhi - sinPhi * sinPhi);
   const p22 = 3.0 * cosPhi * cosPhi, dp22 = -6.0 * sinPhi * cosPhi;
-  const p30 = 2.5 * sinPhi * sinPhi * sinPhi - 1.5 * sinPhi, dp30 = (7.5 * sinPhi * sinPhi - 1.5) * cosPhi;
+  const dp30 = (7.5 * sinPhi * sinPhi - 1.5) * cosPhi;
   const p31 = 1.5 * (5.0 * sinPhi * sinPhi - 1.0) * cosPhi;
   const dp31 = 1.5 * ((10.0 * sinPhi * cosPhi * cosPhi) - (5.0 * sinPhi * sinPhi - 1.0) * sinPhi);
   const p32 = 15.0 * sinPhi * cosPhi * cosPhi, dp32 = 15.0 * (cosPhi * cosPhi * cosPhi - 2.0 * sinPhi * sinPhi * cosPhi);

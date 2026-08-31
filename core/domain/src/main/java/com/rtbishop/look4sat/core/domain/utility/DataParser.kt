@@ -69,7 +69,9 @@ class DataParser(private val dispatcher: CoroutineDispatcher) {
         val hour = timestamp.substring(11, 13).toInt() * 3600000
         val min = timestamp.substring(14, 16).toInt() * 60000
         val sec = timestamp.substring(17, 19).toInt() * 1000
-        val ms = timestamp.substring(20, 26).toInt() / 1000.0
+        // Fractional seconds: accept any digit count after '.', pad/truncate to microseconds.
+        val fracDigits = timestamp.substringAfter('.', "").takeWhile { it.isDigit() }.padEnd(6, '0').take(6)
+        val ms = (fracDigits.toIntOrNull() ?: 0) / 1000.0
         val frac = ((hour + min + sec + ms) / 86400000.0).toString().substring(1)
         val epoch = "${year.substring(2)}$day$frac".toDouble()
         OrbitalData(

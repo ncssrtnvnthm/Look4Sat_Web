@@ -1,16 +1,29 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { TopBar, TimerRow, SwipeableItem } from '../../presentation/Components';
-import { usePassesStore, formatPassTime, groupPassesByDate } from './passesStore';
+import { usePassesStore } from './passesStore';
 import { useSettingsStore, useSelectedStore } from '../../data/stores';
+import { formatPassTime, groupPassesByDate } from '../../lib/time';
+import { noradUrl } from '../../lib/noradUrl';
 import styles from './PassesPage.module.css';
-
-let timerId = 0;
 
 export function PassesPage() {
   const store = usePassesStore();
   const isUtc = useSettingsStore((s) => s.otherSettings.stateOfUtc);
-  const grouped = groupPassesByDate(store.itemsList);
+  const grouped = groupPassesByDate(store.itemsList, isUtc);
   const activePass = store.selectedPass ?? store.nextPass;
+
+  // Filter dialog drafts — applied only on "Apply & Refresh".
+  const [draftHours, setDraftHours] = useState(store.hours);
+  const [draftElevation, setDraftElevation] = useState(store.elevation);
+  const [draftDeepSpace, setDraftDeepSpace] = useState(store.showDeepSpace);
+
+  useEffect(() => {
+    if (store.isPassesDialogShown) {
+      setDraftHours(store.hours);
+      setDraftElevation(store.elevation);
+      setDraftDeepSpace(store.showDeepSpace);
+    }
+  }, [store.isPassesDialogShown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePassClick = (catNum: number) => {
     store.selectPass(catNum);
@@ -23,8 +36,8 @@ export function PassesPage() {
 
   useEffect(() => {
     store.refreshPasses();
-    timerId = window.setInterval(() => store.tickTimers(), 1000);
-    return () => clearInterval(timerId);
+    const id = window.setInterval(() => store.tickTimers(), 1000);
+    return () => clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -81,10 +94,10 @@ export function PassesPage() {
 
       {/* Loading with progress */}
       {store.isRefreshing && store.calcTotal > 0 && (
-        <div className={styles.progressSection}>
-          <div className={styles.progressBar}>
+        <div className={styles.refreshProgressSection}>
+          <div className={styles.refreshProgressBar}>
             <div
-              className={styles.progressFill}
+              className={styles.refreshProgressFill}
               style={{ width: `${(store.calcProgress / store.calcTotal) * 100}%` }}
             />
           </div>
@@ -112,11 +125,12 @@ export function PassesPage() {
                     <span className={styles.passName}>
                       {pass.name}{' '}
                       <a
-                        href={`https://www.n2yo.com/satellite/?s=${pass.catNum}`}
+                        href={noradUrl(pass.catNum)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className={styles.noradLink}
                         title="View on N2YO"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         #{pass.catNum}
                       </a>
@@ -149,7 +163,7 @@ export function PassesPage() {
         )}
       </div>
 
-      {/* Filter dialog */}
+      {/* Filter dialog — edits are local until "Apply & Refresh" */}
       {store.isPassesDialogShown && (
         <div className={styles.dialogOverlay} onClick={store.togglePassesDialog}>
           <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
@@ -159,28 +173,28 @@ export function PassesPage() {
               <span>Include deep-space satellites</span>
               <input
                 type="checkbox"
-                checked={store.showDeepSpace}
-                onChange={() => store.filterPasses(store.hours, store.elevation, !store.showDeepSpace)}
+                checked={draftDeepSpace}
+                onChange={(e) => setDraftDeepSpace(e.target.checked)}
               />
             </label>
 
             <div className={styles.dialogRow}>
-              <span>Min elevation: {store.elevation}°</span>
+              <span>Min elevation: {draftElevation}°</span>
               <input
                 type="range"
                 min="0"
                 max="60"
                 step="1"
-                value={store.elevation}
-                onChange={(e) => store.filterPasses(store.hours, Number(e.target.value), store.showDeepSpace)}
+                value={draftElevation}
+                onChange={(e) => setDraftElevation(Number(e.target.value))}
               />
             </div>
 
             <div className={styles.dialogRow}>
-              <span>Time window: {store.hours}h</span>
+              <span>Time window: {draftHours}h</span>
               <select
-                value={store.hours}
-                onChange={(e) => store.filterPasses(Number(e.target.value), store.elevation, store.showDeepSpace)}
+                value={draftHours}
+                onChange={(e) => setDraftHours(Number(e.target.value))}
               >
                 {[1, 2, 4, 8, 12, 24, 48, 72, 96, 120, 144, 168, 192, 216, 240].map((h) => (
                   <option key={h} value={h}>{h}h</option>
@@ -194,7 +208,11 @@ export function PassesPage() {
               </button>
               <button
                 className={`${styles.dialogBtn} ${styles.dialogBtnPrimary}`}
-                onClick={() => { store.refreshPasses(); store.togglePassesDialog(); }}
+                onClick={() => {
+                  store.filterPasses(draftHours, draftElevation, draftDeepSpace);
+                  store.refreshPasses();
+                  store.togglePassesDialog();
+                }}
               >
                 Apply &amp; Refresh
               </button>

@@ -61,17 +61,6 @@ export async function getAllEntriesWithCategories(): Promise<SatEntryWithCategor
   return db.entries.toArray();
 }
 
-export async function insertEntries(entries: OrbitalData[], category?: string): Promise<void> {
-  await db.entries.bulkPut(
-    entries.map((data) => ({
-      catnum: data.catnum,
-      name: data.name,
-      categories: category ? [category] : [],
-      data,
-    })),
-  );
-}
-
 /**
  * Merge new entries into the database, preserving existing categories
  * and adding the new category tag without overwriting existing ones.

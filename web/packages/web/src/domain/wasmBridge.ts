@@ -1,15 +1,15 @@
-// ── Wasm bridge: calls Kotlin/Wasm SGP4 functions exposed as globals ──
+// ── Wasm bridge: calls Kotlin/JS SGP4 functions exposed as globals ──
 // domain.js is loaded via <script> in index.html — UMD bundle sets window.*
-// The .wasm file is in public/wasm/ alongside domain.js for correct MIME type.
+// (built from web/packages/domain/src/jsMain — see JsBridge.kt).
 
-import type { WasmOrbitalPos, WasmSunPosition, WasmMoonPosition, WasmPass } from './wasmTypes';
+import type { WasmOrbitalPos, WasmSunPosition, WasmMoonPosition, WasmPass, WasmTrackPoint } from './wasmTypes';
 
 interface WasmModule {
   look4satGetPosition(orbitalDataJson: string, lat: number, lon: number, alt: number, timeMs: number): string;
-  look4satWillBeSeen(orbitalDataJson: string, lat: number, lon: number): boolean;
   look4satGetSunPosition(lat: number, lon: number, timeMs: number): string;
   look4satGetMoonPosition(lat: number, lon: number, timeMs: number): string;
   look4satCalculatePasses(orbitalDataJson: string, lat: number, lon: number, alt: number, startTimeMs: number, endTimeMs: number, minElevation: number): string;
+  look4satGetTrack(orbitalDataJson: string, lat: number, lon: number, alt: number, startTimeMs: number, endTimeMs: number, stepMs: number): string;
 }
 
 function getWasmNow(): WasmModule | null {
@@ -48,7 +48,7 @@ function getWasm(): Promise<WasmModule | null> {
   return waitForWasm();
 }
 
-// ── Public API — same signatures as before, direct calls (no worker) ──
+// ── Public API — direct calls (no worker) ──
 
 export async function getPosition(
   orbitalDataJson: string, lat: number, lon: number, alt: number, timeMs: number,
@@ -67,14 +67,6 @@ export async function getPosition(
     console.error('[wasm] getPosition error:', e);
     return { type: 'error' };
   }
-}
-
-export async function willBeSeen(orbitalDataJson: string, lat: number, lon: number) {
-  const w = await getWasm();
-  if (!w) return { type: 'error' as const };
-  try {
-    return { type: 'willBeSeen' as const, result: w.look4satWillBeSeen(orbitalDataJson, lat, lon) };
-  } catch { return { type: 'error' as const }; }
 }
 
 export async function getSunPosition(lat: number, lon: number, timeMs: number) {
@@ -107,6 +99,23 @@ export async function calculatePasses(
     return { type: 'calculatePasses' as const, result: parsed.passes };
   } catch (e) {
     console.error('[wasm] calculatePasses error:', e);
+    return { type: 'error' as const };
+  }
+}
+
+/** Ground-track points computed in one bridge call (avoids thousands of round-trips). */
+export async function getTrack(
+  orbitalDataJson: string, lat: number, lon: number, alt: number,
+  startTimeMs: number, endTimeMs: number, stepMs: number,
+) {
+  const w = await getWasm();
+  if (!w) return { type: 'error' as const };
+  try {
+    const json = w.look4satGetTrack(orbitalDataJson, lat, lon, alt, startTimeMs, endTimeMs, stepMs);
+    const parsed = JSON.parse(json) as { points: WasmTrackPoint[] };
+    return { type: 'getTrack' as const, result: parsed.points };
+  } catch (e) {
+    console.error('[wasm] getTrack error:', e);
     return { type: 'error' as const };
   }
 }

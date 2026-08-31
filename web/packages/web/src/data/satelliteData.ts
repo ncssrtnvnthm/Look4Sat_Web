@@ -1,5 +1,5 @@
 import { useSettingsStore } from './stores';
-import { mergeEntries, insertRadios, db } from './database';
+import { mergeEntries, insertRadios, db, getAllEntriesWithCategories } from './database';
 import type { OrbitalData, SatRadio } from '../domain/types';
 
 // ── Celestrak data source URLs (matching Android Sources.kt) ──
@@ -104,7 +104,12 @@ export function parseCSV(text: string): OrbitalData[] {
       const hour = parseInt(timestamp.substring(11, 13)) * 3600000;
       const min = parseInt(timestamp.substring(14, 16)) * 60000;
       const sec = parseInt(timestamp.substring(17, 19)) * 1000;
-      const ms = parseInt(timestamp.substring(20, 26)) / 1000;
+      // Fractional seconds: accept any digit count after '.', pad/truncate to microseconds.
+      const fracDigits = (timestamp.split('.')[1] ?? '')
+        .replace(/[^0-9].*$/, '')
+        .padEnd(6, '0')
+        .slice(0, 6);
+      const ms = (parseInt(fracDigits) || 0) / 1000;
       const frac = ((hour + min + sec + ms) / 86400000).toString().substring(1);
       const epoch = parseFloat(`${year.toString().substring(2)}${day}${frac}`);
 
@@ -207,6 +212,10 @@ function celestrakUrl(originalUrl: string): string {
 }
 
 async function fetchText(url: string): Promise<string> {
+  // ZIP sources (Classified, McCants) not supported in browser — reject before downloading.
+  if (url.endsWith('.zip')) {
+    throw new Error('ZIP sources not supported in web version — use All download instead');
+  }
   const finalUrl = celestrakUrl(url);
   const resp = await fetch(finalUrl);
   if (!resp.ok) {
@@ -217,10 +226,6 @@ async function fetchText(url: string): Promise<string> {
     }
     throw new Error(`HTTP ${resp.status}: ${body.slice(0, 200)}`);
   }
-  // ZIP files (Classified, McCants) not supported in browser — skip gracefully
-  if (url.endsWith('.zip')) {
-    throw new Error('ZIP sources not supported in web version — use All download instead');
-  }
   return resp.text();
 }
 
@@ -228,6 +233,7 @@ export interface FetchResult {
   inserted: number;
   upToDate: boolean;
   message: string;
+  errors: string[];
 }
 
 export async function fetchAndStoreSatelliteData(
@@ -236,6 +242,7 @@ export async function fetchAndStoreSatelliteData(
 ): Promise<FetchResult> {
   let totalInserted = 0;
   let upToDate = false;
+  const errors: string[] = [];
 
   for (const url of urls) {
     try {
@@ -254,6 +261,8 @@ export async function fetchAndStoreSatelliteData(
       if (err instanceof DataUpToDateError) {
         upToDate = true;
       } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`Failed to fetch from ${url}: ${msg}`);
         console.error(`Failed to fetch from ${url}:`, err);
       }
     }
@@ -270,17 +279,84 @@ export async function fetchAndStoreSatelliteData(
   });
 
   if (upToDate && totalInserted === 0) {
-    return { inserted: 0, upToDate: true, message: 'Data is up to date.' };
+    return { inserted: 0, upToDate: true, message: 'Data is up to date.', errors };
   }
   return {
     inserted: totalInserted,
     upToDate: false,
     message: totalInserted > 0 ? `Stored ${totalInserted} satellites.` : 'No new data.',
+    errors,
   };
 }
 
+/** Fetch a URL, returning null on any failure (network, HTTP error). */
+async function tryFetchText(url: string): Promise<string | null> {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    return await resp.text();
+  } catch {
+    return null;
+  }
+}
+
+/** Run async work over a list with a bounded number of concurrent workers. */
+async function runPool<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+  const queue = [...items];
+  const runners = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (queue.length > 0) {
+      const item = queue.shift()!;
+      await worker(item);
+    }
+  });
+  await Promise.all(runners);
+}
+
+export interface CategoryTagResult {
+  tagged: number;
+  errors: number;
+  skipped: number;
+}
+
+/**
+ * Fetch and tag satellites by category group, in parallel, skipping groups
+ * that are already tagged in the database (their membership data is static).
+ * @param categories [categoryKey, url][] pairs
+ * @param concurrency Max parallel downloads
+ * @param onProgress Called after each group completes
+ */
+export async function fetchAndTagCategories(
+  categories: Array<[string, string]>,
+  concurrency = 4,
+  onProgress?: (done: number, total: number, current: string) => void,
+): Promise<CategoryTagResult> {
+  // Skip groups already present in the DB — re-downloading them is the slow part.
+  const existing = await getAllEntriesWithCategories();
+  const taggedSet = new Set<string>();
+  for (const entry of existing) {
+    for (const cat of entry.categories) taggedSet.add(cat);
+  }
+  const pending = categories.filter(([cat]) => !taggedSet.has(cat));
+  const skipped = categories.length - pending.length;
+
+  let tagged = 0;
+  let errors = 0;
+  let done = 0;
+
+  await runPool(pending, concurrency, async ([cat, url]) => {
+    const result = await fetchAndStoreSatelliteData([url], cat);
+    if (result.inserted > 0) tagged += result.inserted;
+    errors += result.errors.length;
+    done++;
+    onProgress?.(done, pending.length, cat);
+  });
+
+  return { tagged, errors, skipped };
+}
+
 export async function fetchTransceivers(url?: string): Promise<SatRadio[]> {
-  let finalUrl = url || useSettingsStore.getState().dataSourcesSettings.transceiversUrl;
+  const settings = useSettingsStore.getState();
+  let finalUrl = url || settings.dataSourcesSettings.transceiversUrl;
   // Fix old persisted proxy-path URLs and any other bad URLs
   if (
     finalUrl.startsWith('/api/satnogs') ||
@@ -289,59 +365,74 @@ export async function fetchTransceivers(url?: string): Promise<SatRadio[]> {
   ) {
     finalUrl = 'https://db.satnogs.org/api/transmitters/?format=json';
   }
-  // Use proxy in dev mode, direct URL in production
-  finalUrl = celestrakUrl(finalUrl);
-  try {
-    const response = await fetch(finalUrl);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const text = await response.text();
-    // Log first 100 chars for debugging parse issues
-    if (text.length > 0 && (text[0] !== '[' || text[text.length - 1] !== ']')) {
-      console.warn('Transceiver response does not look like JSON array:', text.substring(0, 200));
-    }
-    let radios: SatRadio[];
-    try {
-      radios = JSON.parse(text);
-    } catch {
-      // Try to extract the first valid JSON array from the response
-      const start = text.indexOf('[');
-      if (start >= 0) {
-        let depth = 0;
-        let end = start;
-        for (let i = start; i < text.length; i++) {
-          if (text[i] === '[') depth++;
-          else if (text[i] === ']') { depth--; if (depth === 0) { end = i + 1; break; } }
-        }
-        radios = JSON.parse(text.substring(start, end));
-      } else {
-        throw new Error(`Response is not JSON. First 200 chars: ${text.substring(0, 200)}`);
-      }
-    }
-    // Map SatNOGS API field names to our SatRadio format
-    const mapped: SatRadio[] = radios.map((r: any) => ({
-      uuid: r.uuid || '',
-      name: r.description || r.name || '',
-      description: r.description || '',
-      downlinkLow: r.downlink_low ?? r.downlinkLow ?? null,
-      downlinkHigh: r.downlink_high ?? r.downlinkHigh ?? null,
-      uplinkLow: r.uplink_low ?? r.uplinkLow ?? null,
-      uplinkHigh: r.uplink_high ?? r.uplinkHigh ?? null,
-      mode: r.mode ?? null,
-      ctcss: r.ctcss ?? null,
-      noradCatId: r.norad_cat_id ?? r.noradCatId ?? 0,
-    }));
 
-    if (mapped.length > 0) {
-      await insertRadios(mapped);
-      useSettingsStore.getState().updateDatabaseState({
-        ...useSettingsStore.getState().databaseState,
-        numberOfRadios: mapped.length,
-        updateTimestamp: Date.now(),
-      });
-    }
-    return mapped;
-  } catch (err) {
-    console.error('Failed to fetch transceivers:', err);
+  // Try, in order: the live URL (dev proxy; direct requests are CORS-blocked in
+  // production), the CI-bundled snapshot (see deploy.yml), then a public CORS proxy.
+  const candidates = [
+    celestrakUrl(finalUrl),
+    `${import.meta.env.BASE_URL}data/transceivers.json`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(finalUrl)}`,
+  ];
+
+  let text: string | null = null;
+  for (const candidate of candidates) {
+    text = await tryFetchText(candidate);
+    if (text !== null) break;
+  }
+  if (text === null) {
+    console.error('Failed to fetch transceivers from all sources.');
     return [];
   }
+
+  // Log first 100 chars for debugging parse issues
+  if (text.length > 0 && (text[0] !== '[' || text[text.length - 1] !== ']')) {
+    console.warn('Transceiver response does not look like JSON array:', text.substring(0, 200));
+  }
+  let radios: SatRadio[];
+  try {
+    radios = JSON.parse(text);
+  } catch {
+    // Try to extract the first valid JSON array from the response
+    const start = text.indexOf('[');
+    if (start >= 0) {
+      let depth = 0;
+      let end = start;
+      for (let i = start; i < text.length; i++) {
+        if (text[i] === '[') depth++;
+        else if (text[i] === ']') { depth--; if (depth === 0) { end = i + 1; break; } }
+      }
+      try {
+        radios = JSON.parse(text.substring(start, end));
+      } catch (e) {
+        console.error('Transceiver JSON parse failed:', e);
+        return [];
+      }
+    } else {
+      console.error(`Response is not JSON. First 200 chars: ${text.substring(0, 200)}`);
+      return [];
+    }
+  }
+  // Map SatNOGS API field names to our SatRadio format
+  const mapped: SatRadio[] = radios.map((r: any) => ({
+    uuid: r.uuid || '',
+    name: r.description || r.name || '',
+    description: r.description || '',
+    downlinkLow: r.downlink_low ?? r.downlinkLow ?? null,
+    downlinkHigh: r.downlink_high ?? r.downlinkHigh ?? null,
+    uplinkLow: r.uplink_low ?? r.uplinkLow ?? null,
+    uplinkHigh: r.uplink_high ?? r.uplinkHigh ?? null,
+    mode: r.mode ?? null,
+    ctcss: r.ctcss ?? null,
+    noradCatId: r.norad_cat_id ?? r.noradCatId ?? 0,
+  }));
+
+  if (mapped.length > 0) {
+    await insertRadios(mapped);
+    useSettingsStore.getState().updateDatabaseState({
+      ...useSettingsStore.getState().databaseState,
+      numberOfRadios: mapped.length,
+      updateTimestamp: Date.now(),
+    });
+  }
+  return mapped;
 }

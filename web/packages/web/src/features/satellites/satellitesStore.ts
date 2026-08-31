@@ -5,7 +5,6 @@ import { useSelectedStore, useSettingsStore } from '../../data/stores';
 import { categoryDisplayName } from '../../data/satelliteData';
 
 interface SatellitesState {
-  isDialogShown: boolean;
   isLoading: boolean;
   shouldSeeWarning: boolean;
   itemsList: SatItem[];
@@ -16,7 +15,6 @@ interface SatellitesState {
   // Actions
   loadSatellites: () => Promise<void>;
   dismissWarning: () => void;
-  toggleTypesDialog: () => void;
   setSearchQuery: (query: string) => void;
   selectAll: () => void;
   selectFiltered: () => void;
@@ -27,7 +25,6 @@ interface SatellitesState {
 }
 
 export const useSatellitesStore = create<SatellitesState>()((set, get) => ({
-  isDialogShown: false,
   isLoading: true,
   shouldSeeWarning: false,
   itemsList: [],
@@ -40,40 +37,45 @@ export const useSatellitesStore = create<SatellitesState>()((set, get) => ({
     const settings = useSettingsStore.getState();
     set({ shouldSeeWarning: settings.otherSettings.shouldSeeWarning });
 
-    const entries = await getAllEntriesWithCategories();
-    const selectedIds = useSelectedStore.getState().selectedIds;
-    const selectedSet = new Set(selectedIds);
+    try {
+      const entries = await getAllEntriesWithCategories();
+      const selectedIds = useSelectedStore.getState().selectedIds;
+      const selectedSet = new Set(selectedIds);
 
-    const items: SatItem[] = entries.map((e) => ({
-      catnum: e.catnum,
-      name: e.name,
-      isSelected: selectedSet.has(e.catnum),
-      categories: e.categories || [],
-    }));
-
-    items.sort((a, b) => a.name.localeCompare(b.name));
-
-    // Build available categories from actual data, not hardcoded list
-    const catCounts = new Map<string, number>();
-    for (const item of items) {
-      for (const cat of item.categories) {
-        catCounts.set(cat, (catCounts.get(cat) || 0) + 1);
-      }
-    }
-    const availableCategories = [...catCounts.entries()]
-      .filter(([key]) => key !== 'All') // "All" is the static default option
-      .sort((a, b) => b[1] - a[1])
-      .map(([key, count]) => ({
-        key,
-        label: `${categoryDisplayName(key)} (${count})`,
+      const items: SatItem[] = entries.map((e) => ({
+        catnum: e.catnum,
+        name: e.name,
+        isSelected: selectedSet.has(e.catnum),
+        categories: e.categories || [],
       }));
 
-    set({
-      itemsList: items,
-      availableCategories,
-      currentCategories: useSelectedStore.getState().selectedTypes,
-      isLoading: false,
-    });
+      items.sort((a, b) => a.name.localeCompare(b.name));
+
+      // Build available categories from actual data, not hardcoded list
+      const catCounts = new Map<string, number>();
+      for (const item of items) {
+        for (const cat of item.categories) {
+          catCounts.set(cat, (catCounts.get(cat) || 0) + 1);
+        }
+      }
+      const availableCategories = [...catCounts.entries()]
+        .filter(([key]) => key !== 'All') // "All" is the static default option
+        .sort((a, b) => b[1] - a[1])
+        .map(([key, count]) => ({
+          key,
+          label: `${categoryDisplayName(key)} (${count})`,
+        }));
+
+      set({
+        itemsList: items,
+        availableCategories,
+        currentCategories: useSelectedStore.getState().selectedTypes,
+        isLoading: false,
+      });
+    } catch (err) {
+      console.error('Failed to load satellites:', err);
+      set({ isLoading: false });
+    }
   },
 
   dismissWarning: () => {
@@ -83,8 +85,6 @@ export const useSatellitesStore = create<SatellitesState>()((set, get) => ({
     }));
     set({ shouldSeeWarning: false });
   },
-
-  toggleTypesDialog: () => set((s) => ({ isDialogShown: !s.isDialogShown })),
 
   setSearchQuery: (query) => set({ searchQuery: query }),
 
@@ -99,7 +99,7 @@ export const useSatellitesStore = create<SatellitesState>()((set, get) => ({
     set({
       itemsList: state.itemsList.map((item) => ({
         ...item,
-        isSelected: filteredCatnums.has(item.catnum) ? true : item.isSelected,
+        isSelected: item.isSelected || filteredCatnums.has(item.catnum),
       })),
     });
   },

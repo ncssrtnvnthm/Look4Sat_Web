@@ -3,9 +3,7 @@ import { persist } from 'zustand/middleware';
 import type {
   OtherSettings,
   PassesSettings,
-  RCSettings,
   DataSourcesSettings,
-  RadioControlSettings,
   GeoPos,
   DatabaseState,
 } from '../domain/types';
@@ -13,7 +11,6 @@ import type {
 // ── Default values mirroring Android defaults ──
 
 const DEFAULT_OTHER: OtherSettings = {
-  stateOfAutoUpdate: true,
   stateOfSensors: false,
   stateOfSweep: true,
   stateOfUtc: false,
@@ -21,7 +18,6 @@ const DEFAULT_OTHER: OtherSettings = {
   stateOfNightMode: false,
   shouldSeeWarning: true,
   shouldSeeWhatsNew: true,
-  sstvMode: 'Auto',
   timeOffsetMinutes: 0,
 };
 
@@ -32,39 +28,8 @@ const DEFAULT_PASSES: PassesSettings = {
   selectedModes: [],
 };
 
-const DEFAULT_RC: RCSettings = {
-  rotatorState: false,
-  rotatorAddress: '',
-  rotatorPort: '4533',
-  rotatorFormat: 'Hamlib',
-  frequencyState: false,
-  frequencyAddress: '',
-  frequencyPort: '4533',
-  frequencyFormat: 'Hamlib',
-  bluetoothRotatorState: false,
-  bluetoothRotatorFormat: 'Hamlib',
-  bluetoothRotatorName: '',
-  bluetoothRotatorAddress: '',
-  bluetoothFrequencyState: false,
-  bluetoothFrequencyFormat: 'Hamlib',
-  bluetoothFrequencyAddress: '',
-};
-
 const DEFAULT_DATA_SOURCES: DataSourcesSettings = {
-  useCustomTLE: false,
-  useCustomTransceivers: false,
-  tleUrl: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=csv',
   transceiversUrl: 'https://db.satnogs.org/api/transmitters/?format=json',
-};
-
-const DEFAULT_RADIO_CONTROL: RadioControlSettings = {
-  enabled: false,
-  radioModel: 'FT-817',
-  txRadioAddress: '',
-  rxRadioAddress: '',
-  txRadioName: '',
-  rxRadioName: '',
-  baudRate: 9600,
 };
 
 const DEFAULT_POSITION: GeoPos = {
@@ -95,9 +60,7 @@ interface SettingsState {
   // Sub-states
   otherSettings: OtherSettings;
   passesSettings: PassesSettings;
-  rcSettings: RCSettings;
   dataSourcesSettings: DataSourcesSettings;
-  radioControlSettings: RadioControlSettings;
   stationPosition: GeoPos;
   databaseState: DatabaseState;
   appVersionName: string;
@@ -105,9 +68,7 @@ interface SettingsState {
   // Actions
   updateOtherSettings: (transform: (s: OtherSettings) => OtherSettings) => void;
   setPassesSettings: (settings: PassesSettings) => void;
-  updateRCSettings: (settings: RCSettings) => void;
   updateDataSourcesSettings: (settings: DataSourcesSettings) => void;
-  updateRadioControlSettings: (settings: RadioControlSettings) => void;
   setStationPosition: (pos: GeoPos) => void;
   updateDatabaseState: (state: DatabaseState) => void;
 }
@@ -133,9 +94,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       otherSettings: DEFAULT_OTHER,
       passesSettings: DEFAULT_PASSES,
-      rcSettings: DEFAULT_RC,
       dataSourcesSettings: DEFAULT_DATA_SOURCES,
-      radioControlSettings: DEFAULT_RADIO_CONTROL,
       stationPosition: DEFAULT_POSITION,
       databaseState: DEFAULT_DATABASE_STATE,
       appVersionName: '4.4.3',
@@ -143,9 +102,7 @@ export const useSettingsStore = create<SettingsState>()(
       updateOtherSettings: (transform) =>
         set((s) => ({ otherSettings: transform(s.otherSettings) })),
       setPassesSettings: (settings) => set({ passesSettings: settings }),
-      updateRCSettings: (settings) => set({ rcSettings: settings }),
       updateDataSourcesSettings: (settings) => set({ dataSourcesSettings: settings }),
-      updateRadioControlSettings: (settings) => set({ radioControlSettings: settings }),
       setStationPosition: (pos) => set({ stationPosition: pos }),
       updateDatabaseState: (state) => set({ databaseState: state }),
     }),

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { TopBar, SwipeableItem } from '../../presentation/Components';
 import { useSatellitesStore, getFilteredItems } from './satellitesStore';
+import { noradUrl } from '../../lib/noradUrl';
 import styles from './SatellitesPage.module.css';
 
 export function SatellitesPage() {
@@ -59,7 +60,7 @@ export function SatellitesPage() {
             </p>
             <p>
               Always try to narrow down the list to only the ones
-              you're interested in via search and types selector.
+              you're interested in via search and the category dropdown.
             </p>
           </div>
           <button className={styles.warningDismiss} onClick={store.dismissWarning}>
@@ -68,19 +69,7 @@ export function SatellitesPage() {
         </div>
       )}
 
-      {/* Warning */}
-      {store.shouldSeeWarning && (
-        <div className={styles.warning}>
-          <div className={styles.warningContent}>
-            First time? Select satellites to track, then save. Use categories to filter by type.
-          </div>
-          <button className={styles.warningDismiss} onClick={store.dismissWarning}>
-            ✕
-          </button>
-        </div>
-      )}
-
-            {/* Category dropdown */}
+      {/* Category dropdown */}
       <div className={styles.categoryBar}>
         <select
           className={styles.categorySelect}
@@ -115,6 +104,7 @@ export function SatellitesPage() {
               <input
                 type="checkbox"
                 checked={item.isSelected}
+                onClick={(e) => e.stopPropagation()}
                 onChange={() =>
                   store.selectSingle(item.catnum, !item.isSelected)
                 }
@@ -124,10 +114,11 @@ export function SatellitesPage() {
                 <span className={styles.name}>{item.name}</span>
                 <div className={styles.catTags}>
                   <a
-                    href={`https://www.n2yo.com/satellite/?s=${item.catnum}`}
+                    href={noradUrl(item.catnum)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={styles.catnum}
+                    onClick={(e) => e.stopPropagation()}
                   >
                     #{item.catnum}
                   </a>
