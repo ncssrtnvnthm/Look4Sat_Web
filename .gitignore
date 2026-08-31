@@ -1,4 +1,4 @@
-﻿# Gradle
+# Gradle
 .gradle/
 build/
 build-logic/.gradle/
@@ -36,3 +36,24 @@ web/packages/web/celestrakProxy.d.ts
 # CI-generated data snapshot (see deploy.yml)
 web/packages/web/public/data/
 .gradle-home/
+
+# Google Services (e.g. APIs or Firebase)
+google-services.json
+
+# Freeline
+freeline.py
+freeline/
+freeline_project_description.json
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+fastlane/readme.md
+/app/release/app-release.aab
+/app/release/app-release.apk
+/app/release/output-metadata.json
+/app/release/
+/.kotlin/sessions/
+.hermes/

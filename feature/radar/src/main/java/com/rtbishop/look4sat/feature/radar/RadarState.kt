@@ -22,6 +22,7 @@ import com.rtbishop.look4sat.core.domain.predict.CelestialComputer
 import com.rtbishop.look4sat.core.domain.predict.OrbitalPass
 import com.rtbishop.look4sat.core.domain.predict.OrbitalPos
 import com.rtbishop.look4sat.core.domain.sstv.SstvFrame
+import com.rtbishop.look4sat.core.domain.sstv.SstvQualityMetrics
 
 data class RadioPanelState(
     val label: String = "",
@@ -57,11 +58,13 @@ data class RadarState(
     val satTrack: List<OrbitalPos> = emptyList(),
     val shouldShowSweep: Boolean = false,
     val shouldUseCompass: Boolean = false,
+    val shouldFlipRadar: Boolean = false,
     val sunPosition: CelestialComputer.SunPosition? = null,
     val moonPosition: CelestialComputer.MoonPosition? = null,
     val transceivers: TransceiverSubState = TransceiverSubState(),
     val radioControl: RadioControlSubState = RadioControlSubState(),
-    val sstv: SstvSubState = SstvSubState()
+    val sstv: SstvSubState = SstvSubState(),
+    val calculatorOffsetKHz: String = ""
 )
 
 enum class SstvStatus { Idle, Recording }
@@ -72,7 +75,8 @@ data class SstvSubState(
     val hasPermission: Boolean = false,
     val selectedMode: String = "Auto",
     val supportedModes: List<String> = emptyList(),
-    val currentFrame: SstvFrame? = null
+    val currentFrame: SstvFrame? = null,
+    val diagnosticsMetrics: SstvQualityMetrics? = null
 )
 
 sealed interface RadarAction {
@@ -94,4 +98,7 @@ sealed interface RadarAction {
     data object SstvReset : RadarAction
     data class SstvSelectMode(val modeName: String) : RadarAction
     data class SstvPermissionResult(val granted: Boolean) : RadarAction
+
+    // Calculator actions
+    data class ChangeCalculatorOffset(val offsetKHz: String) : RadarAction
 }

@@ -34,6 +34,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -41,6 +44,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.time.Duration.Companion.milliseconds
 
 class PassesViewModel(
     private val satelliteRepo: ISatelliteRepo,
@@ -54,8 +58,13 @@ class PassesViewModel(
             nextPass = defaultPass,
             hours = settingsRepo.passesSettings.value.hoursAhead,
             elevation = settingsRepo.passesSettings.value.minElevation,
+            lowElevation = settingsRepo.otherSettings.value.lowElevation,
+            highElevation = settingsRepo.otherSettings.value.highElevation,
+            aosStartMinute = settingsRepo.passesSettings.value.aosStartMinute,
+            aosEndMinute = settingsRepo.passesSettings.value.aosEndMinute,
+            invertAosTimeWindow = settingsRepo.passesSettings.value.invertAosTimeWindow,
             showDeepSpace = settingsRepo.passesSettings.value.showDeepSpace,
-            modes = settingsRepo.passesSettings.value.selectedModes,
+            modes = settingsRepo.selectedSatModes.value,
             shouldSeeWhatsNew = settingsRepo.otherSettings.value.shouldSeeWhatsNew
         )
     )
@@ -71,35 +80,52 @@ class PassesViewModel(
         // React to settings changes: update UTC flag and whatsNew
         viewModelScope.launch {
             settingsRepo.otherSettings.collectLatest { settings ->
-                _uiState.update { it.copy(isUtc = settings.stateOfUtc, shouldSeeWhatsNew = settings.shouldSeeWhatsNew) }
-            }
-        }
-        // Main tick loop: reacts to new passes, then ticks every second
-        viewModelScope.launch {
-            satelliteRepo.passes.collectLatest { allPasses ->
-                while (isActive) {
-                    val timeNow = System.currentTimeMillis()
-                    val isUtc = _uiState.value.isUtc
-                    val showDeepSpace = _uiState.value.showDeepSpace
-                    val filtered = allPasses
-                        .let { if (showDeepSpace) it else it.filter { pass -> !pass.isDeepSpace } }
-                    val processed = computePassProgress(filtered, timeNow)
-                    val (nextPass, nextTime, isAos) = resolveNextPass(processed, timeNow)
-                    val sunTimes = computeSunTimes(processed, isUtc)
-                    val grouped = groupPasses(processed, isUtc)
-                    _uiState.update {
-                        it.copy(
-                            itemsList = processed,
-                            groupedPasses = grouped,
-                            sunTimes = sunTimes,
-                            nextPass = nextPass,
-                            nextTime = nextTime,
-                            isNextTimeAos = isAos
-                        )
-                    }
-                    delay(1000)
+                _uiState.update {
+                    it.copy(
+                        isUtc = settings.stateOfUtc,
+                        shouldSeeWhatsNew = settings.shouldSeeWhatsNew,
+                        lowElevation = settings.lowElevation,
+                        highElevation = settings.highElevation
+                    )
                 }
             }
+        }
+        viewModelScope.launch {
+            settingsRepo.selectedSatModes.collectLatest { modes ->
+                _uiState.update { it.copy(modes = modes) }
+            }
+        }
+        // Tick loop: restarts on passes change, UTC/DeepSpace changes. Grouping/sun-time
+        // computations run once per restart, progress/countdown are calculated every second.
+        viewModelScope.launch {
+            combine(
+                satelliteRepo.passes,
+                settingsRepo.otherSettings.map { it.stateOfUtc }.distinctUntilChanged(),
+                settingsRepo.passesSettings.map { it.showDeepSpace }.distinctUntilChanged()
+            ) { passes, isUtc, showDeepSpace -> Triple(passes, isUtc, showDeepSpace) }
+                .collectLatest { (allPasses, isUtc, showDeepSpace) ->
+                    val filtered = if (showDeepSpace) allPasses
+                    else allPasses.filter { !it.isDeepSpace }
+                    // Expensive: recompute sun times once per items/UTC change, not every second
+                    val sunTimes = computeSunTimes(filtered, isUtc)
+                    _uiState.update { it.copy(sunTimes = sunTimes) }
+                    while (isActive) {
+                        val timeNow = System.currentTimeMillis()
+                        val processed = computePassProgress(filtered, timeNow)
+                        val grouped = groupPasses(processed, isUtc)
+                        val (nextPass, nextTime, isAos) = resolveNextPass(processed, timeNow)
+                        _uiState.update {
+                            it.copy(
+                                itemsList = processed,
+                                groupedPasses = grouped,
+                                nextPass = nextPass,
+                                nextTime = nextTime,
+                                isNextTimeAos = isAos
+                            )
+                        }
+                        delay(1000.milliseconds)
+                    }
+                }
         }
     }
 
@@ -107,9 +133,17 @@ class PassesViewModel(
         when (action) {
             PassesAction.DismissWhatsNew -> settingsRepo.setWhatsNewDismissed()
             is PassesAction.FilterPasses ->
-                applyFilter(action.hoursAhead, action.minElevation, action.showDeepSpace, _uiState.value.modes)
-            is PassesAction.FilterRadios ->
-                applyFilter(_uiState.value.hours, _uiState.value.elevation, _uiState.value.showDeepSpace, action.modes)
+                applyFilter(
+                    hoursAhead = action.hoursAhead,
+                    minElevation = action.minElevation,
+                    lowElevation = action.lowElevation,
+                    highElevation = action.highElevation,
+                    aosStartMinute = action.aosStartMinute,
+                    aosEndMinute = action.aosEndMinute,
+                    invertAosTimeWindow = action.invertAosTimeWindow,
+                    showDeepSpace = action.showDeepSpace
+                )
+            is PassesAction.FilterRadios -> setModesFilter(action.modes)
             PassesAction.RefreshPasses -> refreshPasses()
             PassesAction.TogglePassesDialog ->
                 _uiState.update { it.copy(isPassesDialogShown = !it.isPassesDialogShown) }
@@ -120,12 +154,28 @@ class PassesViewModel(
         }
     }
 
+    private fun displayLocale(): Locale {
+        val locale = Locale.getDefault()
+        return if (locale.language == Locale.CHINESE.language) locale else Locale.ENGLISH
+    }
+
+    /** Returns the visible pass-date format. Keep non-Chinese locales identical to upstream. */
+    private fun dateFormat(tz: TimeZone): SimpleDateFormat {
+        val locale = displayLocale()
+        val pattern = if (locale.language == Locale.CHINESE.language) {
+            "yyyy'年'M'月'd'日' EEEE"
+        } else {
+            "EEE, dd MMM yyyy"
+        }
+        return SimpleDateFormat(pattern, locale).also { it.timeZone = tz }
+    }
+
     // Computes sunrise/sunset strings for each unique calendar day in the pass list, plus today for DeepSpace
     private fun computeSunTimes(passes: List<OrbitalPass>, isUtc: Boolean): Map<String, Pair<String, String>> {
         val stationPos = settingsRepo.stationPosition.value
         val tz = if (isUtc) TimeZone.getTimeZone("UTC") else TimeZone.getDefault()
-        val sdfDate = SimpleDateFormat("EEE, dd MMM yyyy", Locale.ENGLISH).also { it.timeZone = tz }
-        val sdfTime = SimpleDateFormat("HH:mm", Locale.ENGLISH).also { it.timeZone = tz }
+        val sdfDate = dateFormat(tz)
+        val sdfTime = SimpleDateFormat("HH:mm", displayLocale()).also { it.timeZone = tz }
         val result = LinkedHashMap<String, Pair<String, String>>()
         // DeepSpace group always shows today's sun times
         if (passes.any { it.isDeepSpace }) {
@@ -148,7 +198,7 @@ class PassesViewModel(
 
     private fun groupPasses(passes: List<OrbitalPass>, isUtc: Boolean): Map<String, List<OrbitalPass>> {
         val tz = if (isUtc) TimeZone.getTimeZone("UTC") else TimeZone.getDefault()
-        val sdfDate = SimpleDateFormat("EEE, dd MMM yyyy", Locale.ENGLISH).also { it.timeZone = tz }
+        val sdfDate = dateFormat(tz)
         val ordered = LinkedHashMap<String, List<OrbitalPass>>()
         val deepSpace = passes.filter { it.isDeepSpace }
         if (deepSpace.isNotEmpty()) ordered["DeepSpace (period >225min)"] = deepSpace
@@ -198,19 +248,73 @@ class PassesViewModel(
     private fun applyFilter(
         hoursAhead: Int,
         minElevation: Double,
-        showDeepSpace: Boolean,
-        modes: List<String>
+        lowElevation: Double,
+        highElevation: Double,
+        aosStartMinute: Int,
+        aosEndMinute: Int,
+        invertAosTimeWindow: Boolean,
+        showDeepSpace: Boolean
     ) = viewModelScope.launch {
-        settingsRepo.setPassesSettings(PassesSettings(showDeepSpace, hoursAhead, minElevation, modes))
+        settingsRepo.setPassesSettings(
+            PassesSettings(
+                showDeepSpace,
+                hoursAhead,
+                minElevation,
+                aosStartMinute,
+                aosEndMinute,
+                invertAosTimeWindow
+            )
+        )
+        settingsRepo.updateOtherSettings { it.copy(lowElevation = lowElevation, highElevation = highElevation) }
         _uiState.update {
-            it.copy(hours = hoursAhead, elevation = minElevation, showDeepSpace = showDeepSpace, modes = modes)
+            it.copy(
+                hours = hoursAhead,
+                elevation = minElevation,
+                lowElevation = lowElevation,
+                highElevation = highElevation,
+                aosStartMinute = aosStartMinute,
+                aosEndMinute = aosEndMinute,
+                invertAosTimeWindow = invertAosTimeWindow,
+                showDeepSpace = showDeepSpace
+            )
         }
-        satelliteRepo.calculatePasses(System.currentTimeMillis(), hoursAhead, minElevation, modes)
+        val modes = settingsRepo.selectedSatModes.value
+        satelliteRepo.calculatePasses(
+            time = System.currentTimeMillis(),
+            hoursAhead = hoursAhead,
+            minElevation = minElevation,
+            aosStartMinute = aosStartMinute,
+            aosEndMinute = aosEndMinute,
+            invertAosTimeWindow = invertAosTimeWindow,
+            modes = modes
+        )
+    }
+
+    private fun setModesFilter(modes: List<String>) = viewModelScope.launch {
+        settingsRepo.setSelectedSatModes(modes)
+        _uiState.update { it.copy(modes = modes) }
+        satelliteRepo.calculatePasses(
+            time = System.currentTimeMillis(),
+            hoursAhead = _uiState.value.hours,
+            minElevation = _uiState.value.elevation,
+            aosStartMinute = _uiState.value.aosStartMinute,
+            aosEndMinute = _uiState.value.aosEndMinute,
+            invertAosTimeWindow = _uiState.value.invertAosTimeWindow,
+            modes = modes
+        )
     }
 
     private fun refreshPasses() = viewModelScope.launch {
-        val (_, hoursAhead, minElevation, modes) = settingsRepo.passesSettings.value
-        satelliteRepo.calculatePasses(System.currentTimeMillis(), hoursAhead, minElevation, modes)
+        val settings = settingsRepo.passesSettings.value
+        satelliteRepo.calculatePasses(
+            time = System.currentTimeMillis(),
+            hoursAhead = settings.hoursAhead,
+            minElevation = settings.minElevation,
+            aosStartMinute = settings.aosStartMinute,
+            aosEndMinute = settings.aosEndMinute,
+            invertAosTimeWindow = settings.invertAosTimeWindow,
+            modes = settingsRepo.selectedSatModes.value
+        )
     }
 
     companion object {
