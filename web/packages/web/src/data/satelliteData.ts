@@ -211,22 +211,58 @@ function celestrakUrl(originalUrl: string): string {
   return originalUrl;
 }
 
+/** HTTP status error carrying the status code for retry decisions. */
+class HttpStatusError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'HttpStatusError';
+    this.status = status;
+  }
+}
+
+/** Statuses Celestrak returns transiently under load; safe to retry with backoff. */
+const RETRYABLE_STATUSES = new Set([429, 502, 503, 504]);
+
 async function fetchText(url: string): Promise<string> {
   // ZIP sources (Classified, McCants) not supported in browser — reject before downloading.
   if (url.endsWith('.zip')) {
     throw new Error('ZIP sources not supported in web version — use All download instead');
   }
   const finalUrl = celestrakUrl(url);
-  const resp = await fetch(finalUrl);
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '');
-    // Celestrak returns 403 with "has not updated" when data hasn't changed
-    if (resp.status === 403 && body.includes('has not updated')) {
-      throw new DataUpToDateError(body.trim());
+
+  // Celestrak occasionally answers 503 on the first request (load / new connection);
+  // retrying with a short backoff almost always succeeds.
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 1000 * attempt));
     }
-    throw new Error(`HTTP ${resp.status}: ${body.slice(0, 200)}`);
+    try {
+      const resp = await fetch(finalUrl);
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '');
+        // Celestrak returns 403 with "has not updated" when data hasn't changed
+        if (resp.status === 403 && body.includes('has not updated')) {
+          throw new DataUpToDateError(body.trim());
+        }
+        throw new HttpStatusError(resp.status, `HTTP ${resp.status}: ${body.slice(0, 200)}`);
+      }
+      return await resp.text();
+    } catch (err) {
+      lastErr = err;
+      // Retry transient HTTP statuses and network failures only.
+      const transient =
+        err instanceof HttpStatusError
+          ? RETRYABLE_STATUSES.has(err.status)
+          : err instanceof TypeError; // fetch network errors
+      if (!transient || attempt === 2) throw err;
+      console.warn(
+        `[fetch] ${finalUrl} failed (${err instanceof Error ? err.message : err}); retrying…`,
+      );
+    }
   }
-  return resp.text();
+  throw lastErr instanceof Error ? lastErr : new Error(`Failed to fetch ${finalUrl}`);
 }
 
 export interface FetchResult {
@@ -289,15 +325,21 @@ export async function fetchAndStoreSatelliteData(
   };
 }
 
-/** Fetch a URL, returning null on any failure (network, HTTP error). */
+/** Fetch a URL, returning null on any failure (network, HTTP error). Retries once after a pause. */
 async function tryFetchText(url: string): Promise<string | null> {
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) return null;
-    return await resp.text();
-  } catch {
-    return null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) return null;
+      return await resp.text();
+    } catch {
+      // fall through to retry / next candidate
+    }
   }
+  return null;
 }
 
 /** Run async work over a list with a bounded number of concurrent workers. */
