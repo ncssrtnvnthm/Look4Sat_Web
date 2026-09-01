@@ -10,6 +10,71 @@
   color: var(--color-on-surface-variant);
 }
 
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 0;
+}
+
+.search {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--color-outline);
+  border-radius: 8px;
+  background: var(--color-surface-container);
+  color: var(--color-on-surface);
+  font-size: 13px;
+  outline: none;
+}
+
+.search:focus {
+  border-color: var(--color-primary);
+}
+
+.heardToggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.heardToggle input {
+  accent-color: var(--color-primary);
+}
+
+.bandRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 16px 0;
+}
+
+.bandChipBtn {
+  padding: 3px 10px;
+  border: 1px solid var(--color-outline);
+  border-radius: 12px;
+  background: var(--color-surface-container);
+  color: var(--color-on-surface);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.bandChipBtn:hover {
+  background: var(--color-surface-container-high);
+}
+
+.bandChipActive {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-surface);
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -40,11 +105,111 @@
 
 .satSection {
   margin-bottom: 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.satSectionSelected {
+  border-color: var(--color-primary);
+  background: rgba(79, 195, 247, 0.06);
+}
+
+.satHeader {
+  padding: 6px 0 2px;
+  cursor: pointer;
+}
+
+.satHeaderMain {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .satName {
   font-size: 13px;
   font-weight: 600;
+}
+
+.bandChip {
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface-variant);
+  font-size: 10px;
+}
+
+.trackedBadge {
+  font-size: 10px;
+  color: var(--color-aos);
+}
+
+.n2yoLink,
+.amsatLink {
+  font-size: 11px;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.satMeta {
+  font-size: 11px;
+  color: var(--color-on-surface-variant);
+  margin-top: 2px;
+}
+
+.heard24 {
+  color: var(--color-aos);
+}
+
+.details {
+  margin: 4px 0 6px;
+  padding: 8px;
+  background: var(--color-surface-container);
+  border-radius: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.detailRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.detailDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.detailStatus {
+  font-weight: 600;
+  min-width: 90px;
+}
+
+.detailCall {
+  min-width: 80px;
+  color: var(--color-on-surface);
+}
+
+.detailGrid {
+  min-width: 60px;
+  color: var(--color-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+
+.detailTime {
+  margin-left: auto;
+  color: var(--color-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+
+.detailEmpty {
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
   padding: 4px 0;
 }
 
@@ -72,14 +237,25 @@
   height: 18px;
   border-radius: 3px;
   min-width: 0;
-  cursor: default;
+  cursor: pointer;
+}
+
+.timeLabel {
+  flex: 1;
+  min-width: 0;
+  font-size: 8px;
+  text-align: center;
+  color: var(--color-on-surface-variant);
+  line-height: 12px;
 }
 
 .loading {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   padding: 32px;
   text-align: center;
   color: var(--color-on-surface-variant);
