@@ -66,11 +66,16 @@ export async function getAllEntriesWithCategories(): Promise<SatEntryWithCategor
  * and adding the new category tag without overwriting existing ones.
  */
 export async function mergeEntries(entries: OrbitalData[], category: string): Promise<void> {
-  const existing = await db.entries.bulkGet(entries.map(e => e.catnum));
+  // Skip rows without a valid catalog number — a NaN key would make the
+  // whole bulkPut throw and reject an otherwise good batch.
+  const valid = entries.filter((e) => Number.isFinite(e.catnum) && e.catnum > 0);
+  if (valid.length === 0) return;
+
+  const existing = await db.entries.bulkGet(valid.map(e => e.catnum));
   const existingMap = new Map(existing.filter(Boolean).map(e => [e!.catnum, e!]));
 
   await db.entries.bulkPut(
-    entries.map((data) => {
+    valid.map((data) => {
       const prev = existingMap.get(data.catnum);
       const categories = prev
         ? [...new Set([...prev.categories, category])]

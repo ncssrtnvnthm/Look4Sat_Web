@@ -222,7 +222,7 @@ class HttpStatusError extends Error {
 }
 
 /** Statuses Celestrak returns transiently under load; safe to retry with backoff. */
-const RETRYABLE_STATUSES = new Set([429, 502, 503, 504]);
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 async function fetchText(url: string): Promise<string> {
   // ZIP sources (Classified, McCants) not supported in browser — reject before downloading.
@@ -272,6 +272,11 @@ export interface FetchResult {
   errors: string[];
 }
 
+/** Minimum plausible size of the full "All" (GROUP=active) catalog; the real
+ *  catalog has ~9500 entries. Responses parsing below this are treated as
+ *  truncated/failed instead of being stored as a partial update. */
+const MIN_ALL_SATELLITES = 3000;
+
 export async function fetchAndStoreSatelliteData(
   urls: string[] = [SATELLITE_DATA_URLS.All],
   category?: string,
@@ -287,6 +292,17 @@ export async function fetchAndStoreSatelliteData(
       const data = text.includes('OBJECT_NAME,OBJECT_ID,EPOCH')
         ? parseCSV(text)
         : parseTLE(text);
+
+      // Celestrak under load can return a truncated body with HTTP 200. On a fresh
+      // database a partial parse (e.g. ~2000 of ~9500 satellites) is then stored as
+      // if it were a successful update, so the app "only shows" a fraction of the
+      // catalog. Reject implausibly small downloads of the full "All" catalog.
+      const isAllSource = url === SATELLITE_DATA_URLS.All;
+      if (isAllSource && data.length < MIN_ALL_SATELLITES) {
+        throw new Error(
+          `Incomplete response from Celestrak (only ${data.length} satellites parsed) — not stored. Please try again.`,
+        );
+      }
 
       if (data.length > 0) {
         const tag = category || Object.entries(SATELLITE_DATA_URLS).find(([, u]) => u === url)?.[0] || 'Other';
@@ -470,9 +486,11 @@ export async function fetchTransceivers(url?: string): Promise<SatRadio[]> {
 
   if (mapped.length > 0) {
     await insertRadios(mapped);
+    // Report the real stored count, not the fetched batch size.
+    const realRadioCount = await db.radios.count();
     useSettingsStore.getState().updateDatabaseState({
       ...useSettingsStore.getState().databaseState,
-      numberOfRadios: mapped.length,
+      numberOfRadios: realRadioCount,
       updateTimestamp: Date.now(),
     });
   }
