@@ -5,6 +5,7 @@ import { SatellitesPage } from '../features/satellites/SatellitesPage';
 import { PassesPage } from '../features/passes/PassesPage';
 import { RadarPage } from '../features/radar/RadarPage';
 import { MapPage } from '../features/map/MapPage';
+import { StatusPage } from '../features/status/StatusPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { useSettingsStore } from '../data/stores';
 
@@ -45,6 +46,7 @@ export function App() {
           <Route path="passes" element={<PassesPage />} />
           <Route path="radar" element={<RadarPage />} />
           <Route path="map" element={<MapPage />} />
+          <Route path="status" element={<StatusPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

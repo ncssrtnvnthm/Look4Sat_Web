@@ -2,12 +2,13 @@
 // domain.js is loaded via <script> in index.html — UMD bundle sets window.*
 // (built from web/packages/domain/src/jsMain — see JsBridge.kt).
 
-import type { WasmOrbitalPos, WasmSunPosition, WasmMoonPosition, WasmPass, WasmTrackPoint } from './wasmTypes';
+import type { WasmOrbitalPos, WasmSunPosition, WasmMoonPosition, WasmPass, WasmTrackPoint, WasmSunTimes } from './wasmTypes';
 
 interface WasmModule {
   look4satGetPosition(orbitalDataJson: string, lat: number, lon: number, alt: number, timeMs: number): string;
   look4satGetSunPosition(lat: number, lon: number, timeMs: number): string;
   look4satGetMoonPosition(lat: number, lon: number, timeMs: number): string;
+  look4satGetSunTimes(lat: number, lon: number, timeMs: number): string;
   look4satCalculatePasses(orbitalDataJson: string, lat: number, lon: number, alt: number, startTimeMs: number, endTimeMs: number, minElevation: number): string;
   look4satGetTrack(orbitalDataJson: string, lat: number, lon: number, alt: number, startTimeMs: number, endTimeMs: number, stepMs: number): string;
 }
@@ -84,6 +85,16 @@ export async function getMoonPosition(lat: number, lon: number, timeMs: number) 
   try {
     const result: WasmMoonPosition = JSON.parse(w.look4satGetMoonPosition(lat, lon, timeMs));
     return { type: 'getMoonPosition' as const, result };
+  } catch { return { type: 'error' as const }; }
+}
+
+/** Next sunrise/sunset (epoch ms) for the observer from a start time. */
+export async function getSunTimes(lat: number, lon: number, timeMs: number) {
+  const w = await getWasm();
+  if (!w) return { type: 'error' as const };
+  try {
+    const result: WasmSunTimes = JSON.parse(w.look4satGetSunTimes(lat, lon, timeMs));
+    return { type: 'getSunTimes' as const, result };
   } catch { return { type: 'error' as const }; }
 }
 

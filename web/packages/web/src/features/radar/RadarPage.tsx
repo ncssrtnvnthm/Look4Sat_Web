@@ -3,6 +3,7 @@ import { RadarView } from './RadarView';
 import { TopBar, TimerRow, IconCard } from '../../presentation/Components';
 import { useRadarStore } from './radarStore';
 import { noradUrl } from '../../lib/noradUrl';
+import { dopplerShiftFreq } from '../../lib/doppler';
 import styles from './RadarPage.module.css';
 import buttons from '../../presentation/buttons.module.css';
 
@@ -10,6 +11,13 @@ import buttons from '../../presentation/buttons.module.css';
 function formatMHz(hz: number | null | undefined): string {
   if (hz == null) return '—';
   return (hz / 1e6).toFixed(3) + ' MHz';
+}
+
+/** Format a small frequency difference in Hz (e.g. doppler shift). */
+function formatHz(hz: number): string {
+  const abs = Math.abs(hz);
+  if (abs >= 1000) return (hz / 1000).toFixed(1) + ' kHz';
+  return hz.toFixed(0) + ' Hz';
 }
 
 export function RadarPage() {
@@ -113,25 +121,42 @@ export function RadarPage() {
           <IconCard icon="⌬" label="Altitude" value={orbitalPos ? `${orbitalPos.altitude.toFixed(0)} km` : '—'} />
         </div>
 
-        {/* Radio frequencies — all transponders/beacons */}
+        {/* Radio frequencies — doppler-shifted transponders/beacons */}
         {activeRadios.length > 0 && (
           <div className={styles.radioList}>
-            {activeRadios.map((r) => (
-              <div key={r.uuid} className={styles.radioRow}>
-                <div className={styles.radioDesc}>{r.description || 'Transponder'}</div>
-                <div className={styles.radioFreqs}>
-                  {r.downlinkLow != null && (
-                    <span className={styles.radioFreq}>▼ {formatMHz(r.downlinkLow)}</span>
-                  )}
-                  {r.uplinkLow != null && (
-                    <span className={styles.radioFreq}>▲ {formatMHz(r.uplinkLow)}</span>
-                  )}
-                  {r.mode && (
-                    <span className={styles.radioMode}>{r.mode}</span>
-                  )}
+            {activeRadios.map((r) => {
+              const rangeRate = orbitalPos?.distanceRate ?? 0;
+              const downlink = r.downlinkLow != null ? dopplerShiftFreq(r.downlinkLow, rangeRate, false) : null;
+              const uplink = r.uplinkLow != null ? dopplerShiftFreq(r.uplinkLow, rangeRate, true) : null;
+              const downlinkTip = r.downlinkLow != null && orbitalPos
+                ? `base ${formatMHz(r.downlinkLow)} · Δ${formatHz(downlink! - r.downlinkLow)}`
+                : undefined;
+              const uplinkTip = r.uplinkLow != null && orbitalPos
+                ? `base ${formatMHz(r.uplinkLow)} · Δ${formatHz(uplink! - r.uplinkLow)}`
+                : undefined;
+              return (
+                <div key={r.uuid} className={styles.radioRow}>
+                  <div className={styles.radioDesc}>{r.description || 'Transponder'}</div>
+                  <div className={styles.radioFreqs}>
+                    {downlink != null && (
+                      <span className={styles.radioFreq} title={downlinkTip}>▼ {formatMHz(downlink)}</span>
+                    )}
+                    {uplink != null && (
+                      <span className={styles.radioFreq} title={uplinkTip}>▲ {formatMHz(uplink)}</span>
+                    )}
+                    {r.mode && (
+                      <span className={styles.radioMode}>{r.mode}</span>
+                    )}
+                  </div>
                 </div>
+              );
+            })}
+            {orbitalPos && (
+              <div className={styles.radioDoppler}>
+                Doppler: {orbitalPos.distanceRate > 0 ? 'receding' : 'approaching'} (
+                {formatHz(Math.abs(orbitalPos.distanceRate * 1000))}/s)
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>

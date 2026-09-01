@@ -33,6 +33,11 @@ export interface WasmMoonPosition {
   longitude: number;
 }
 
+export interface WasmSunTimes {
+  sunrise: number;
+  sunset: number;
+}
+
 export interface WasmPass {
   aosTime: number;
   aosAzimuth: number;

@@ -30,6 +30,7 @@ const DEFAULT_PASSES: PassesSettings = {
 
 const DEFAULT_DATA_SOURCES: DataSourcesSettings = {
   transceiversUrl: 'https://db.satnogs.org/api/transmitters/?format=json',
+  satelliteSources: [], // empty = use the built-in Celestrak group list
 };
 
 const DEFAULT_POSITION: GeoPos = {

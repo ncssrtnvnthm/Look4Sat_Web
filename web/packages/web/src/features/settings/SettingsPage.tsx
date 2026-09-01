@@ -1,18 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { TopBar } from '../../presentation/Components';
 import { useSettingsStore } from '../../data/stores';
-import { fetchAndStoreSatelliteData, fetchTransceivers, fetchAndTagCategories, SATELLITE_DATA_URLS } from '../../data/satelliteData';
+import {
+  fetchAndStoreSatelliteData,
+  fetchTransceivers,
+  fetchAndTagCategories,
+  importSatelliteFile,
+  getEffectiveSatelliteSources,
+  SATELLITE_DATA_URLS,
+} from '../../data/satelliteData';
+import type { SatelliteSource } from '../../domain/types';
 import { db } from '../../data/database';
 import styles from './SettingsPage.module.css';
+import buttons from '../../presentation/buttons.module.css';
 
 export function SettingsPage() {
   const store = useSettingsStore();
-  const { otherSettings, stationPosition, databaseState } = store;
+  const { otherSettings, stationPosition, databaseState, dataSourcesSettings } = store;
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
   const [gpsMsg, setGpsMsg] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [manualLat, setManualLat] = useState(stationPosition.latitude.toString());
   const [manualLon, setManualLon] = useState(stationPosition.longitude.toString());
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Custom data-source editor (local drafts, saved explicitly).
+  const [sources, setSources] = useState<SatelliteSource[]>(() =>
+    dataSourcesSettings.satelliteSources.length > 0
+      ? dataSourcesSettings.satelliteSources
+      : getEffectiveSatelliteSources().map(([name, url]) => ({ name, url })),
+  );
+  const [sourcesSaved, setSourcesSaved] = useState(false);
   const [manualAlt, setManualAlt] = useState(stationPosition.altitude.toString());
 
   // Refresh DB counts on mount
@@ -53,18 +71,10 @@ export function SettingsPage() {
         return;
       }
 
-      // Step 2: Tag satellites with their Celestrak groups, downloading in
-      // parallel and skipping groups that are already tagged.
-      // Skip "All", "Other", and non-Celestrak sources (Amsat, Classified, McCants, R4UAB).
-      const celestrakCategories = Object.entries(SATELLITE_DATA_URLS).filter(
-        ([key, url]) =>
-          key !== 'All' &&
-          key !== 'Other' &&
-          url.includes('celestrak.org') &&
-          url !== '',
-      );
-
-      const tagResult = await fetchAndTagCategories(celestrakCategories, 4, (done, total, current) => {
+      // Step 2: Tag satellites with their groups (customized sources if the
+      // user defined any, otherwise the built-in Celestrak groups), downloading
+      // in parallel and skipping groups that are already tagged.
+      const tagResult = await fetchAndTagCategories(undefined, 4, (done, total, current) => {
         setUpdateMsg(`Tagging satellites (${done}/${total})… ${current}`);
       });
 
@@ -74,6 +84,28 @@ export function SettingsPage() {
       );
     } catch {
       setUpdateMsg('Update failed. Check console.');
+    }
+    setUpdating(false);
+  };
+
+  const handleImportFile = async (file: File) => {
+    setUpdating(true);
+    try {
+      const text = await file.text();
+      const count = await importSatelliteFile(text, file.name.replace(/\.[^.]+$/, '') || 'Custom');
+      const [satCount, radioCount] = await Promise.all([db.entries.count(), db.radios.count()]);
+      store.updateDatabaseState({
+        numberOfSatellites: satCount,
+        numberOfRadios: radioCount,
+        updateTimestamp: Date.now(),
+      });
+      setUpdateMsg(
+        count > 0
+          ? `Imported ${count} satellites from ${file.name}.`
+          : `No satellites parsed from ${file.name} — expected a TLE (.txt) or OMM/CSV (.csv) file.`,
+      );
+    } catch (err) {
+      setUpdateMsg(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
     }
     setUpdating(false);
   };
@@ -264,6 +296,109 @@ export function SettingsPage() {
                   {cat}
                 </button>
               ))}
+          </div>
+        </section>
+
+        {/* Import Section */}
+        <section className={styles.section}>
+          <h3 className={styles.sectionTitle}>Import Orbital Data</h3>
+          <p className={styles.posHint}>
+            Load satellites from a local TLE (.txt) or OMM/CSV (.csv) file. Imported satellites are
+            tagged "{'Custom'}" and available in the Satellites page.
+          </p>
+          <button
+            className={styles.btn}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={updating}
+          >
+            📂 Import TLE / OMM file
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.csv,.tle,.json"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImportFile(file);
+              e.target.value = ''; // allow re-selecting the same file
+            }}
+          />
+        </section>
+
+        {/* Data Sources Section */}
+        <section className={styles.section}>
+          <h3 className={styles.sectionTitle}>Satellite Data Sources</h3>
+          <p className={styles.posHint}>
+            Customize which groups are downloaded for category tagging. The base catalog
+            (all active satellites) always comes from Celestrak's GROUP=active. Leaving the
+            list empty restores the built-in Celestrak groups.
+          </p>
+          {sources.map((source, i) => (
+            <div key={i} className={styles.sourceRow}>
+              <input
+                className={styles.posInput}
+                style={{ flex: 1 }}
+                value={source.name}
+                placeholder="Name (category tag)"
+                onChange={(e) => {
+                  const next = [...sources];
+                  next[i] = { ...next[i], name: e.target.value };
+                  setSources(next);
+                  setSourcesSaved(false);
+                }}
+              />
+              <input
+                className={styles.posInput}
+                style={{ flex: 2 }}
+                value={source.url}
+                placeholder="https://... (TLE or CSV URL)"
+                onChange={(e) => {
+                  const next = [...sources];
+                  next[i] = { ...next[i], url: e.target.value };
+                  setSources(next);
+                  setSourcesSaved(false);
+                }}
+              />
+              <button
+                className={buttons.actionBtn}
+                onClick={() => {
+                  setSources((prev) => prev.filter((_, j) => j !== i));
+                  setSourcesSaved(false);
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <div className={styles.sourceRow}>
+            <button
+              className={styles.smallBtn}
+              onClick={() => {
+                setSources((prev) => [...prev, { name: '', url: '' }]);
+                setSourcesSaved(false);
+              }}
+            >
+              + Add source
+            </button>
+            <button
+              className={`${buttons.actionBtn} ${buttons.primary}`}
+              onClick={() => {
+                const valid = sources.filter((s) => s.name.trim() && s.url.trim());
+                store.updateDataSourcesSettings({
+                  ...store.dataSourcesSettings,
+                  satelliteSources: valid,
+                });
+                setSourcesSaved(true);
+              }}
+            >
+              Save sources
+            </button>
+            {sourcesSaved && (
+              <span className={styles.updateMsg} style={{ marginLeft: 8 }}>
+                Saved ✓
+              </span>
+            )}
           </div>
         </section>
 

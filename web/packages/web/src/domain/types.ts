@@ -107,8 +107,16 @@ export interface OtherSettings {
   timeOffsetMinutes: number;
 }
 
+/** A user-managed satellite data source (customizable Celestrak groups). */
+export interface SatelliteSource {
+  name: string;
+  url: string;
+}
+
 export interface DataSourcesSettings {
   transceiversUrl: string;
+  /** Custom sources; empty = use the built-in Celestrak group list. */
+  satelliteSources: SatelliteSource[];
 }
 
 // ── Celestial positions ──

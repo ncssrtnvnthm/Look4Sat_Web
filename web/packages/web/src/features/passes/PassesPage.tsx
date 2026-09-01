@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { TopBar, TimerRow, SwipeableItem } from '../../presentation/Components';
-import { usePassesStore } from './passesStore';
+import { usePassesStore, formatSunTime } from './passesStore';
 import { useSettingsStore, useSelectedStore } from '../../data/stores';
 import { formatPassTime, groupPassesByDate } from '../../lib/time';
 import { noradUrl } from '../../lib/noradUrl';
+import { buildPassesIcs, downloadIcs } from '../../lib/ics';
 import styles from './PassesPage.module.css';
 import buttons from '../../presentation/buttons.module.css';
 
@@ -17,12 +18,14 @@ export function PassesPage() {
   const [draftHours, setDraftHours] = useState(store.hours);
   const [draftElevation, setDraftElevation] = useState(store.elevation);
   const [draftDeepSpace, setDraftDeepSpace] = useState(store.showDeepSpace);
+  const [draftModes, setDraftModes] = useState<string[]>(store.modes);
 
   useEffect(() => {
     if (store.isPassesDialogShown) {
       setDraftHours(store.hours);
       setDraftElevation(store.elevation);
       setDraftDeepSpace(store.showDeepSpace);
+      setDraftModes(store.modes);
     }
   }, [store.isPassesDialogShown]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -33,6 +36,17 @@ export function PassesPage() {
     if (idx >= 0) {
       useSelectedStore.getState().setViewedSatIndex(idx);
     }
+  };
+
+  const handleExport = () => {
+    const passes = store.itemsList.map((p) => ({
+      name: p.name,
+      catNum: p.catNum,
+      aosTime: p.aosTime,
+      losTime: p.losTime,
+      maxElevation: p.maxElevation,
+    }));
+    downloadIcs(buildPassesIcs(passes));
   };
 
   useEffect(() => {
@@ -47,6 +61,9 @@ export function PassesPage() {
         title="Passes"
         actions={
           <>
+            <button className={buttons.actionBtn} onClick={handleExport} title="Export passes to calendar (.ics)">
+              ⬇
+            </button>
             <button className={buttons.actionBtn} onClick={store.togglePassesDialog}>
               Filter
             </button>
@@ -79,6 +96,11 @@ export function PassesPage() {
               {formatPassTime(activePass.aosTime, isUtc)} →{' '}
               {formatPassTime(activePass.losTime, isUtc)}
             </span>
+            {store.sunTimes && (
+              <span className={styles.sunTimes} title="Sunrise / sunset on the pass day (civil twilight)">
+                ☀ ↑{formatSunTime(store.sunTimes.sunrise, isUtc)} ↓{formatSunTime(store.sunTimes.sunset, isUtc)}
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -203,6 +225,30 @@ export function PassesPage() {
               </select>
             </div>
 
+            {store.availableModes.length > 0 && (
+              <div className={styles.dialogRow}>
+                <span>Modes</span>
+                <div className={styles.modeGrid}>
+                  {store.availableModes.map((mode) => (
+                    <label key={mode} className={styles.modeLabel}>
+                      <input
+                        type="checkbox"
+                        checked={draftModes.includes(mode)}
+                        onChange={(e) => {
+                          setDraftModes((prev) =>
+                            e.target.checked
+                              ? [...prev, mode]
+                              : prev.filter((m) => m !== mode),
+                          );
+                        }}
+                      />
+                      {mode}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className={styles.dialogActions}>
               <button className={styles.dialogBtn} onClick={store.togglePassesDialog}>
                 Close
@@ -211,6 +257,7 @@ export function PassesPage() {
                 className={`${styles.dialogBtn} ${styles.dialogBtnPrimary}`}
                 onClick={() => {
                   store.filterPasses(draftHours, draftElevation, draftDeepSpace);
+                  store.filterModes(draftModes);
                   store.refreshPasses();
                   store.togglePassesDialog();
                 }}

@@ -105,6 +105,24 @@ export async function getRadiosWithId(satId: number): Promise<SatRadio[]> {
   return radios.map((r) => r.data);
 }
 
+/** Distinct radio modes per satellite (for the passes modes filter). */
+export async function getModesForIds(satIds: number[]): Promise<Map<number, Set<string>>> {
+  if (satIds.length === 0) return new Map();
+  const radios = await db.radios.where('satId').anyOf(satIds).toArray();
+  const map = new Map<number, Set<string>>();
+  for (const r of radios) {
+    const mode = r.data.mode;
+    if (!mode) continue;
+    let set = map.get(r.satId);
+    if (!set) {
+      set = new Set();
+      map.set(r.satId, set);
+    }
+    set.add(mode);
+  }
+  return map;
+}
+
 export async function insertRadios(radios: SatRadio[]): Promise<void> {
   await db.radios.bulkPut(
     radios.map((data) => ({

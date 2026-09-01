@@ -1,5 +1,6 @@
+import 'fake-indexeddb/auto';
 import { describe, it, expect } from 'vitest';
-import { parseCSV, parseTLE, celestrakUrl, validateAllCatalogSize, describeHttpError, SATELLITE_DATA_URLS } from './satelliteData';
+import { parseCSV, parseTLE, celestrakUrl, validateAllCatalogSize, describeHttpError, importSatelliteFile, getEffectiveSatelliteSources, SATELLITE_DATA_URLS } from './satelliteData';
 
 const CSV_HEADER =
   'OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT';
@@ -146,5 +147,48 @@ describe('describeHttpError', () => {
 
   it('handles an empty body', () => {
     expect(describeHttpError(503, '')).toBe('HTTP 503');
+  });
+});
+
+describe('importSatelliteFile', () => {
+  it('imports TLE text tagged with the given category', async () => {
+    const tle = `TEST SAT
+1 99999U 26001A   26243.50000000  .00000000  00000-0  00000-0 0  9999
+2 99999  51.6000 120.0000 0005000  60.0000  90.0000 15.50000000000000`;
+    const count = await importSatelliteFile(tle, 'Custom');
+    expect(count).toBe(1);
+    const { getAllEntriesWithCategories, db } = await import('./database');
+    const all = await getAllEntriesWithCategories();
+    const sat = all.find((e) => e.catnum === 99999);
+    expect(sat).toBeDefined();
+    expect(sat!.categories).toContain('Custom');
+    await db.entries.clear();
+  });
+});
+
+describe('getEffectiveSatelliteSources', () => {
+  it('returns the built-in Celestrak groups by default', async () => {
+    const { useSettingsStore } = await import('./stores');
+    useSettingsStore.getState().updateDataSourcesSettings({
+      ...useSettingsStore.getState().dataSourcesSettings,
+      satelliteSources: [],
+    });
+    const sources = getEffectiveSatelliteSources();
+    expect(sources.length).toBeGreaterThan(10);
+    expect(sources.find(([name]) => name === 'All')).toBeUndefined();
+    expect(sources.every(([, url]) => url.trim() !== '')).toBe(true);
+  });
+
+  it("returns the user's customized sources when set", async () => {
+    const { useSettingsStore } = await import('./stores');
+    useSettingsStore.getState().updateDataSourcesSettings({
+      ...useSettingsStore.getState().dataSourcesSettings,
+      satelliteSources: [
+        { name: 'MyGroup', url: 'https://example.com/tle.txt' },
+        { name: 'All', url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=csv' },
+      ],
+    });
+    const sources = getEffectiveSatelliteSources();
+    expect(sources).toEqual([['MyGroup', 'https://example.com/tle.txt']]);
   });
 });

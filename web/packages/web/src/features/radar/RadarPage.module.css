@@ -98,3 +98,10 @@
   background: var(--color-surface-container-high);
   border-radius: 8px;
 }
+
+.radioDoppler {
+  font-size: 11px;
+  color: var(--color-on-surface-variant);
+  padding: 2px 0 0;
+  font-variant-numeric: tabular-nums;
+}

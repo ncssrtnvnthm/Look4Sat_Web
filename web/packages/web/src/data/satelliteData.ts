@@ -408,25 +408,38 @@ export interface CategoryTagResult {
 }
 
 /**
+ * The satellite sources to tag from: the user's customized list when set,
+ * otherwise the built-in Celestrak group list (minus "All" and empty URLs).
+ */
+export function getEffectiveSatelliteSources(): Array<[string, string]> {
+  const custom = useSettingsStore.getState().dataSourcesSettings.satelliteSources;
+  const entries = custom.length > 0
+    ? custom.map((s) => [s.name, s.url] as [string, string])
+    : Object.entries(SATELLITE_DATA_URLS);
+  return entries.filter(([name, url]) => name !== 'All' && url.trim() !== '');
+}
+
+/**
  * Fetch and tag satellites by category group, in parallel, skipping groups
  * that are already tagged in the database (their membership data is static).
- * @param categories [categoryKey, url][] pairs
+ * Uses the user's customized sources when set, otherwise the built-in list.
  * @param concurrency Max parallel downloads
  * @param onProgress Called after each group completes
  */
 export async function fetchAndTagCategories(
-  categories: Array<[string, string]>,
+  categories?: Array<[string, string]>,
   concurrency = 4,
   onProgress?: (done: number, total: number, current: string) => void,
 ): Promise<CategoryTagResult> {
+  const effective = categories ?? getEffectiveSatelliteSources();
   // Skip groups already present in the DB — re-downloading them is the slow part.
   const existing = await getAllEntriesWithCategories();
   const taggedSet = new Set<string>();
   for (const entry of existing) {
     for (const cat of entry.categories) taggedSet.add(cat);
   }
-  const pending = categories.filter(([cat]) => !taggedSet.has(cat));
-  const skipped = categories.length - pending.length;
+  const pending = effective.filter(([cat]) => !taggedSet.has(cat));
+  const skipped = effective.length - pending.length;
 
   let tagged = 0;
   let errors = 0;
@@ -441,6 +454,20 @@ export async function fetchAndTagCategories(
   });
 
   return { tagged, errors, skipped };
+}
+
+/**
+ * Import orbital elements from a local file (TLE .txt or OMM .csv).
+ * Auto-detects the format and merges entries tagged with [tag].
+ * @returns the number of satellites stored
+ */
+export async function importSatelliteFile(text: string, tag: string): Promise<number> {
+  const data = text.includes('OBJECT_NAME,OBJECT_ID,EPOCH')
+    ? parseCSV(text)
+    : parseTLE(text);
+  if (data.length === 0) return 0;
+  await mergeEntries(data, tag);
+  return data.length;
 }
 
 export async function fetchTransceivers(url?: string): Promise<SatRadio[]> {

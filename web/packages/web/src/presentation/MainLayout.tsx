@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: '/passes', label: 'Passes', icon: '⏱️' },
   { to: '/radar', label: 'Radar', icon: '📡' },
   { to: '/map', label: 'Map', icon: '🗺️' },
+  { to: '/status', label: 'Status', icon: '📊' },
   { to: '/settings', label: 'Settings', icon: '⚙️' },
 ] as const;
 

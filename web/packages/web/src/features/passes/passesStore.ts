@@ -1,12 +1,17 @@
 import { create } from 'zustand';
 import type { OrbitalPass } from '../../domain/types';
 import { useSettingsStore, useSelectedStore, getAdjustedTime } from '../../data/stores';
-import { getEntriesWithIds } from '../../data/database';
-import { calculatePasses } from '../../domain/wasmBridge';
-import { formatTimer } from '../../lib/time';
+import { getEntriesWithIds, getModesForIds } from '../../data/database';
+import { calculatePasses, getSunTimes } from '../../domain/wasmBridge';
+import { formatTimer, formatPassTime } from '../../lib/time';
 
 const CHUNK_SIZE = 8;   // satellites per chunk — keep UI responsive
 const YIELD_MS = 1;     // yield to event loop between chunks
+
+export interface SunTimes {
+  sunrise: number; // epoch ms, 0 = not found (polar day/night)
+  sunset: number;
+}
 
 interface PassesState {
   isPassesDialogShown: boolean;
@@ -18,7 +23,14 @@ interface PassesState {
   hours: number;
   elevation: number;
   showDeepSpace: boolean;
+  /** Selected radio modes; when non-empty, only satellites with a matching
+   *  transponder mode are considered (empty = all). */
+  modes: string[];
+  /** Distinct radio modes available for filtering (from the transceiver DB). */
+  availableModes: string[];
   itemsList: OrbitalPass[];
+  /** Sunrise/sunset (epoch ms) for the day of the active pass. */
+  sunTimes: SunTimes | null;
   shouldSeeWhatsNew: boolean;
   /** Pass calculation progress — processed satellite count */
   calcProgress: number;
@@ -31,7 +43,14 @@ interface PassesState {
   selectPass: (catNum: number) => void;
   resetSelectedPass: () => void;
   filterPasses: (hours: number, elevation: number, showDeepSpace: boolean) => void;
+  filterModes: (modes: string[]) => void;
   togglePassesDialog: () => void;
+}
+
+/** Format an epoch-ms time as HH:MM in UTC or local (for sun times). */
+export function formatSunTime(ms: number, isUtc: boolean): string {
+  if (ms <= 0) return '—';
+  return formatPassTime(ms, isUtc).substring(0, 5);
 }
 
 // Monotonic token invalidating in-flight refreshes when cancelled or restarted.
@@ -47,7 +66,10 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
   hours: 12,
   elevation: 16,
   showDeepSpace: true,
+  modes: [],
+  availableModes: [],
   itemsList: [],
+  sunTimes: null,
   shouldSeeWhatsNew: false,
   calcProgress: 0,
   calcTotal: 0,
@@ -74,14 +96,30 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
         return;
       }
       const { latitude, longitude, altitude } = settings.stationPosition;
-      const { hours: hoursAhead, elevation: minElevation, showDeepSpace } = get();
+      const { hours: hoursAhead, elevation: minElevation, showDeepSpace, modes } = get();
       const now = getAdjustedTime();
       const endTime = now + hoursAhead * 3600000;
 
-      // Filter entries
-      const toProcess = showDeepSpace
+      // Distinct radio modes available for the selected satellites (filter UI).
+      const modesById = await getModesForIds(selectedIds);
+      if (token !== refreshToken) {
+        set({ isRefreshing: false });
+        return;
+      }
+      const availableModes = [...new Set([...modesById.values()].flatMap((s) => [...s]))].sort();
+      set({ availableModes });
+
+      // Filter entries: deep-space toggle, then transponder modes.
+      let toProcess = showDeepSpace
         ? entries
         : entries.filter((e) => !e.isDeepSpace);
+      if (modes.length > 0) {
+        const modeSet = new Set(modes);
+        toProcess = toProcess.filter((e) => {
+          const entryModes = modesById.get(e.catnum);
+          return entryModes != null && [...entryModes].some((m) => modeSet.has(m));
+        });
+      }
 
       const total = toProcess.length;
       set({ calcTotal: total });
@@ -159,6 +197,19 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
         nextPass,
         calcProgress: total,
       });
+
+      // Sunrise/sunset for the active pass's day (start from the previous day
+      // so we get that day's rise/set pair).
+      if (nextPass) {
+        getSunTimes(latitude, longitude, nextPass.aosTime - 24 * 3600 * 1000)
+          .then((resp) => {
+            if (token !== refreshToken) return;
+            if (resp.type === 'getSunTimes') {
+              usePassesStore.setState({ sunTimes: resp.result });
+            }
+          })
+          .catch(() => { /* keep previous sun times */ });
+      }
 
       // Trigger initial timer update
       get().tickTimers();
@@ -254,6 +305,16 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
       || itemsList.find((p) => p.catNum === catNum && p.losTime > now)
       || null;
     set({ selectedPass: pass });
+    if (pass) {
+      const { latitude, longitude } = useSettingsStore.getState().stationPosition;
+      getSunTimes(latitude, longitude, pass.aosTime - 24 * 3600 * 1000)
+        .then((resp) => {
+          if (resp.type === 'getSunTimes') {
+            usePassesStore.setState({ sunTimes: resp.result });
+          }
+        })
+        .catch(() => { /* keep previous sun times */ });
+    }
   },
 
   resetSelectedPass: () => set({ selectedPass: null }),
@@ -266,6 +327,14 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
       hoursAhead: hours,
       minElevation: elevation,
       showDeepSpace,
+    });
+  },
+
+  filterModes: (modes) => {
+    set({ modes });
+    useSettingsStore.getState().setPassesSettings({
+      ...useSettingsStore.getState().passesSettings,
+      selectedModes: modes,
     });
   },
 

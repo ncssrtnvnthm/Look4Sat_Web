@@ -271,3 +271,28 @@
   color: #fff;
   border-color: var(--color-primary);
 }
+
+.sunTimes {
+  color: var(--color-on-surface-variant);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.modeGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.modeLabel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--color-outline);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--color-on-surface);
+  cursor: pointer;
+}

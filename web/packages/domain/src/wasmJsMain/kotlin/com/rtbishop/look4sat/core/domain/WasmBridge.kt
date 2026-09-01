@@ -56,6 +56,12 @@ data class WasmMoonPosition(
 )
 
 @Serializable
+data class WasmSunTimes(
+    val sunrise: Long,
+    val sunset: Long,
+)
+
+@Serializable
 data class WasmPass(
     val aosTime: Long,
     val aosAzimuth: Double,
@@ -188,6 +194,29 @@ fun look4satGetMoonPosition(lat: Double, lon: Double, timeMs: Long): String {
             longitude = moonLon.sanitize(),
         )
     )
+}
+
+/**
+ * Next sunrise/sunset for the observer from [timeMs] (civil twilight threshold).
+ * @return JSON-serialized [WasmSunTimes] with epoch-ms times (0 = not found,
+ * e.g. polar day/night).
+ */
+@JsExport
+fun look4satGetSunTimes(lat: Double, lon: Double, timeMs: Long): String {
+    val pos = GeoPos(lat, lon, 0.0)
+    val times = CelestialComputer.findSunRiseSet(pos, timeMs)
+    var sunrise = times.riseTimeMillis
+    var sunset = times.setTimeMillis
+    // Polar day/night makes the search degenerate (guard exhaustion returns a
+    // fake rise/set); verify the found sunrise is actually near the horizon.
+    if (sunrise > 0L) {
+        val el = CelestialComputer.getSunPosition(pos, sunrise).elevation
+        if (el + 0.8333 > 0.5 || el + 0.8333 < -0.5) {
+            sunrise = 0L
+            sunset = 0L
+        }
+    }
+    return bridgeJson.encodeToString(WasmSunTimes(sunrise, sunset))
 }
 
 /**
