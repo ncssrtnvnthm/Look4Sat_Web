@@ -5,6 +5,7 @@ import { useSettingsStore, useSelectedStore } from '../../data/stores';
 import { formatPassTime, groupPassesByDate } from '../../lib/time';
 import { noradUrl } from '../../lib/noradUrl';
 import styles from './PassesPage.module.css';
+import buttons from '../../presentation/buttons.module.css';
 
 export function PassesPage() {
   const store = usePassesStore();
@@ -46,10 +47,10 @@ export function PassesPage() {
         title="Passes"
         actions={
           <>
-            <button className={styles.actionBtn} onClick={store.togglePassesDialog}>
+            <button className={buttons.actionBtn} onClick={store.togglePassesDialog}>
               Filter
             </button>
-            <button className={styles.actionBtn} onClick={store.refreshPasses}>
+            <button className={buttons.actionBtn} onClick={store.refreshPasses}>
               ↻
             </button>
           </>

@@ -3,6 +3,7 @@ import { TopBar, SwipeableItem } from '../../presentation/Components';
 import { useSatellitesStore, getFilteredItems } from './satellitesStore';
 import { noradUrl } from '../../lib/noradUrl';
 import styles from './SatellitesPage.module.css';
+import buttons from '../../presentation/buttons.module.css';
 
 export function SatellitesPage() {
   const store = useSatellitesStore();
@@ -19,17 +20,17 @@ export function SatellitesPage() {
         title="Satellites"
         actions={
           <>
-            <button className={styles.actionBtn} onClick={store.selectFiltered}>
+            <button className={buttons.actionBtn} onClick={store.selectFiltered}>
               Select shown
             </button>
-            <button className={styles.actionBtn} onClick={store.selectAll}>
+            <button className={buttons.actionBtn} onClick={store.selectAll}>
               All
             </button>
-            <button className={styles.actionBtn} onClick={store.unselectAll}>
+            <button className={buttons.actionBtn} onClick={store.unselectAll}>
               None
             </button>
             <button
-              className={`${styles.actionBtn} ${styles.primary}`}
+              className={`${buttons.actionBtn} ${buttons.primary}`}
               onClick={store.saveSelection}
             >
               Save ({selectedCount})

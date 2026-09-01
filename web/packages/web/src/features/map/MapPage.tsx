@@ -7,6 +7,7 @@ import { useSettingsStore } from '../../data/stores';
 import { SunTerminator } from './SunTerminator';
 import { noradUrl } from '../../lib/noradUrl';
 import styles from './MapPage.module.css';
+import buttons from '../../presentation/buttons.module.css';
 import 'leaflet/dist/leaflet.css';
 
 const stationIcon = L.divIcon({
@@ -116,7 +117,7 @@ export function MapPage() {
         title={selectedSat?.name ?? 'Map'}
         actions={
           <button
-            className={`${styles.actionBtn} ${pinning ? styles.actionBtnActive : ''}`}
+            className={`${buttons.actionBtn} ${pinning ? buttons.actionBtnActive : ''}`}
             onClick={() => setPinning((p) => !p)}
           >
             📍 {pinning ? 'Tap map…' : 'Drop Pin'}
@@ -127,7 +128,7 @@ export function MapPage() {
       {allSatellites.length > 1 && (
         <div className={styles.satToolbar}>
           <button
-            className={styles.actionBtn}
+            className={buttons.actionBtn}
             onClick={store.selectPrev}
             aria-label="Previous satellite"
           >
@@ -137,14 +138,14 @@ export function MapPage() {
             {selectedIndex + 1}/{allSatellites.length}
           </span>
           <button
-            className={styles.actionBtn}
+            className={buttons.actionBtn}
             onClick={store.selectNext}
             aria-label="Next satellite"
           >
             ▶
           </button>
           <select
-            className={styles.satSelect}
+            className={buttons.actionSelect}
             value={selectedIndex}
             onChange={(e) => store.selectSatellite(Number(e.target.value))}
           >

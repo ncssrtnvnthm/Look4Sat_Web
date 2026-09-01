@@ -4,6 +4,7 @@ import { TopBar, TimerRow, IconCard } from '../../presentation/Components';
 import { useRadarStore } from './radarStore';
 import { noradUrl } from '../../lib/noradUrl';
 import styles from './RadarPage.module.css';
+import buttons from '../../presentation/buttons.module.css';
 
 /** Format Hz to MHz with 3 decimal places. */
 function formatMHz(hz: number | null | undefined): string {
@@ -47,15 +48,15 @@ export function RadarPage() {
         }
         actions={
           <>
-            <button className={styles.actionBtn} onClick={store.toggleSweep}>
+            <button className={buttons.actionBtn} onClick={store.toggleSweep}>
               {store.shouldShowSweep ? 'Sweep On' : 'Sweep Off'}
             </button>
-            <button className={styles.actionBtn} onClick={store.toggleCompass}>
+            <button className={buttons.actionBtn} onClick={store.toggleCompass}>
               {store.shouldUseCompass ? 'Compass' : 'Fixed'}
             </button>
             {sats.length > 1 && (
               <select
-                className={styles.satSelect}
+                className={buttons.actionSelect}
                 value={satIdx}
                 onChange={(e) => store.selectSatellite(Number(e.target.value))}
               >
