@@ -57,7 +57,7 @@ interface SelectedState {
   setViewedSatIndex: (index: number) => void;
 }
 
-interface SettingsState {
+export interface SettingsState {
   // Sub-states
   otherSettings: OtherSettings;
   passesSettings: PassesSettings;
@@ -90,6 +90,23 @@ export const useSelectedStore = create<SelectedState>()(
   ),
 );
 
+/**
+ * Merge persisted settings over the current state, filling missing fields of
+ * sub-objects from defaults. Older saved settings (before a field was added,
+ * e.g. satelliteSources) would otherwise replace the whole sub-object and
+ * crash on access (e.g. `.satelliteSources.length`). Exported for tests.
+ */
+export function migrateSettings(persisted: unknown, current: SettingsState): SettingsState {
+  const p = (persisted ?? {}) as Partial<SettingsState>;
+  return {
+    ...current,
+    ...p,
+    dataSourcesSettings: { ...DEFAULT_DATA_SOURCES, ...p.dataSourcesSettings },
+    otherSettings: { ...DEFAULT_OTHER, ...p.otherSettings },
+    passesSettings: { ...DEFAULT_PASSES, ...p.passesSettings },
+  };
+}
+
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
@@ -107,7 +124,10 @@ export const useSettingsStore = create<SettingsState>()(
       setStationPosition: (pos) => set({ stationPosition: pos }),
       updateDatabaseState: (state) => set({ databaseState: state }),
     }),
-    { name: 'look4sat-settings' },
+    {
+      name: 'look4sat-settings',
+      merge: migrateSettings,
+    },
   ),
 );
 

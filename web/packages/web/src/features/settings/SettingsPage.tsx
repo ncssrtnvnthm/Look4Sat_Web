@@ -26,8 +26,8 @@ export function SettingsPage() {
 
   // Custom data-source editor (local drafts, saved explicitly).
   const [sources, setSources] = useState<SatelliteSource[]>(() =>
-    dataSourcesSettings.satelliteSources.length > 0
-      ? dataSourcesSettings.satelliteSources
+    (dataSourcesSettings.satelliteSources ?? []).length > 0
+      ? (dataSourcesSettings.satelliteSources ?? [])
       : getEffectiveSatelliteSources().map(([name, url]) => ({ name, url })),
   );
   const [sourcesSaved, setSourcesSaved] = useState(false);

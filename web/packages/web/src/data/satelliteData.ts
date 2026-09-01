@@ -412,7 +412,7 @@ export interface CategoryTagResult {
  * otherwise the built-in Celestrak group list (minus "All" and empty URLs).
  */
 export function getEffectiveSatelliteSources(): Array<[string, string]> {
-  const custom = useSettingsStore.getState().dataSourcesSettings.satelliteSources;
+  const custom = useSettingsStore.getState().dataSourcesSettings.satelliteSources ?? [];
   const entries = custom.length > 0
     ? custom.map((s) => [s.name, s.url] as [string, string])
     : Object.entries(SATELLITE_DATA_URLS);
