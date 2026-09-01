@@ -37,9 +37,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build Kotlin/JS domain module
+      - name: Build Kotlin/JS domain module and run domain tests
         working-directory: web
-        run: ./gradlew :packages:domain:jsBrowserProductionWebpack
+        run: ./gradlew :packages:domain:jsBrowserProductionWebpack :packages:domain:jvmTest
 
       - name: Copy domain.js to public
         run: |
@@ -53,6 +53,10 @@ jobs:
       - name: Type-check web app
         working-directory: web/packages/web
         run: npm run typecheck
+
+      - name: Run web app tests
+        working-directory: web/packages/web
+        run: npm test
 
       # SatNOGS has no CORS headers, so bundle a fresh snapshot of the
       # transceiver database at deploy time (the app falls back to it in

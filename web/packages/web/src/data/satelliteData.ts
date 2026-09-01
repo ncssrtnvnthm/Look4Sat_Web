@@ -196,19 +196,38 @@ class DataUpToDateError extends Error {
   }
 }
 
-function celestrakUrl(originalUrl: string): string {
+/** Rewrite upstream URLs for the dev proxy (kept pure for testing). */
+export function celestrakUrl(originalUrl: string, isDev: boolean = import.meta.env.DEV): string {
   if (originalUrl.includes('celestrak.org')) {
     // In dev: use Vite proxy. In production: try direct (may need CORS proxy).
-    if (import.meta.env.DEV) {
+    if (isDev) {
       return originalUrl.replace('https://celestrak.org', '/api/celestrak');
     }
   }
   if (originalUrl.includes('db.satnogs.org')) {
-    if (import.meta.env.DEV) {
+    if (isDev) {
       return originalUrl.replace('https://db.satnogs.org', '/api/satnogs');
     }
   }
   return originalUrl;
+}
+
+/** Minimum plausible size of the full "All" (GROUP=active) catalog; the real
+ *  catalog has ~9500 entries. Responses parsing below this are treated as
+ *  truncated/failed instead of being stored as a partial update. */
+export const MIN_ALL_SATELLITES = 3000;
+
+/**
+ * Rejects implausibly small downloads of the full "All" catalog (Celestrak can
+ * return a truncated body with HTTP 200 under load). Returns an error message
+ * when the parsed count is too low, otherwise null.
+ */
+export function validateAllCatalogSize(url: string, parsedCount: number): string | null {
+  const isAllSource = url === SATELLITE_DATA_URLS.All;
+  if (isAllSource && parsedCount < MIN_ALL_SATELLITES) {
+    return `Incomplete response from Celestrak (only ${parsedCount} satellites parsed) — not stored. Please try again.`;
+  }
+  return null;
 }
 
 /** HTTP status error carrying the status code for retry decisions. */
@@ -272,11 +291,6 @@ export interface FetchResult {
   errors: string[];
 }
 
-/** Minimum plausible size of the full "All" (GROUP=active) catalog; the real
- *  catalog has ~9500 entries. Responses parsing below this are treated as
- *  truncated/failed instead of being stored as a partial update. */
-const MIN_ALL_SATELLITES = 3000;
-
 export async function fetchAndStoreSatelliteData(
   urls: string[] = [SATELLITE_DATA_URLS.All],
   category?: string,
@@ -297,11 +311,9 @@ export async function fetchAndStoreSatelliteData(
       // database a partial parse (e.g. ~2000 of ~9500 satellites) is then stored as
       // if it were a successful update, so the app "only shows" a fraction of the
       // catalog. Reject implausibly small downloads of the full "All" catalog.
-      const isAllSource = url === SATELLITE_DATA_URLS.All;
-      if (isAllSource && data.length < MIN_ALL_SATELLITES) {
-        throw new Error(
-          `Incomplete response from Celestrak (only ${data.length} satellites parsed) — not stored. Please try again.`,
-        );
+      const incomplete = validateAllCatalogSize(url, data.length);
+      if (incomplete) {
+        throw new Error(incomplete);
       }
 
       if (data.length > 0) {

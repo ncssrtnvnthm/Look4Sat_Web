@@ -32,11 +32,11 @@ class DataParserTest {
         OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
         ISS (ZARYA),1998-067A,2021-11-16T12:28:09.322176,15.48582035,.0004694,51.6447,309.4881,203.6966,299.8876,0,U,25544,999,31220,.31985E-4,.1288E-4,0
         ISS (ZARYA),1998-067A,2024-03-09T05:45:04.737024,15.49756209,.0005741,51.6418,90.7424,343.9724,92.8274,0,U,25544,999,44305,.25016E-3,.1373E-3,0
-    """.trimIndent().byteInputStream()
+    """.trimIndent()
     private val invalidCSVStream = """
         ISS (ZARYA),1998-067A,2021-11-16T12:28:09.322176,15.48582035,.0004694,51.6447,309.4881,203.6966,299.8876,0,U,25544,999,31220,.31985E-4,.1288E-4,0
         OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
-    """.trimIndent().byteInputStream()
+    """.trimIndent()
     private val validTLEStream = """
         ISS (ZARYA)
         1 25544U 98067A   21320.51955234  .00001288  00000+0  31985-4 0  9990
@@ -44,21 +44,21 @@ class DataParserTest {
         ISS (ZARYA)
         1 25544U 98067A   24069.23963816  .00013730  00000+0  25016-3 0  9999
         2 25544  51.6418  90.7424 0005741 343.9724  92.8274 15.49756209443058
-    """.trimIndent().byteInputStream()
+    """.trimIndent()
     private val invalidTLEStream = """
         1 25544U 98067A   21320.51955234  .00001288  00000+0  31985-4 0  9990
         2 25544  51.6447 309.4881 0004694 203.6966 299.8876 15.48582035312205
-    """.trimIndent().byteInputStream()
+    """.trimIndent()
     private val validJSONStream = """
         [{"uuid":"UzPz4gcsNBPKPKAFPmer7g","description":"Upper side band (drifting)","alive":true,"type":"Transmitter","uplink_low":null,"uplink_high":null,"uplink_drift":null,"downlink_low":136658500,"downlink_high":null,"downlink_drift":null,"mode":"USB","mode_id":9,"uplink_mode":null,"invert":false,"baud":null,"sat_id":"SCHX-0895-2361-9925-0309","norad_cat_id":965,"status":"active","updated":"2019-04-18T05:39:53.343316Z","citation":"CITATION NEEDED - https://xkcd.com/285/","service":"Unknown","coordination":"","coordination_url":""}]
-    """.trimIndent().byteInputStream()
+    """.trimIndent()
     private val invalidJSONStream = """
         [{"description":"Upper side band (drifting)","alive":true,"type":"Transmitter","uplink_low":null,"uplink_high":null,"uplink_drift":null,"downlink_low":136658500,"downlink_high":null,"downlink_drift":null,"mode":"USB","mode_id":9,"uplink_mode":null,"invert":false,"baud":null,"sat_id":"SCHX-0895-2361-9925-0309","norad_cat_id":965,"status":"active","updated":"2019-04-18T05:39:53.343316Z","citation":"CITATION NEEDED - https://xkcd.com/285/","service":"Unknown","coordination":"","coordination_url":""}]
-    """.trimIndent().byteInputStream()
+    """.trimIndent()
 
     @Test
     fun `Given valid CSV stream returns valid data`() = runTest(testDispatcher) {
-        val parsedList = dataParser.parseCSVStream(validCSVStream)
+        val parsedList = dataParser.parseCSV(validCSVStream)
         assert(parsedList.size == 2)
         assert(parsedList[0].epoch == 21320.51955234)
         assert(parsedList[1].epoch == 24069.23963816)
@@ -69,8 +69,8 @@ class DataParserTest {
         val csvStream = """
             OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
             ISS (ZARYA),1998-067A,2021-11-16T12:28:09.322176,15.48582035,.0004694,51.6447,309.4881,203.6966,299.8876,0,U,25544,999,31220,.31985E-4,.1288E-4,0
-        """.trimIndent().byteInputStream()
-        val sat = dataParser.parseCSVStream(csvStream)[0]
+        """.trimIndent()
+        val sat = dataParser.parseCSV(csvStream)[0]
         assert(sat.name == "ISS (ZARYA)")
         assert(sat.catnum == 25544)
         assert(sat.meanmo == 15.48582035)
@@ -88,8 +88,8 @@ class DataParserTest {
         val csvStream = """
             OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
             ISS (ZARYA),1998-067A,2021-11-16T12:28:09.322176,15.48582035,.0004694,51.6447,309.4881,203.6966,299.8876,0,U,25544,999,31220,.31985E-4,.1288E-4,0
-        """.trimIndent().byteInputStream()
-        val sat = dataParser.parseCSVStream(csvStream)[0]
+        """.trimIndent()
+        val sat = dataParser.parseCSV(csvStream)[0]
         // ISS is healthy, should not be decayed even years later
         assert(!sat.hasDecayed(System.currentTimeMillis()))
     }
@@ -100,20 +100,20 @@ class DataParserTest {
         val csvStream = """
             OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT
             DEBRIS,2020-001A,2020-01-15T00:00:00.000000,15.9,.001,51.0,100.0,200.0,300.0,0,U,99999,1,100,.5E-3,.05,0
-        """.trimIndent().byteInputStream()
-        val sat = dataParser.parseCSVStream(csvStream)[0]
+        """.trimIndent()
+        val sat = dataParser.parseCSV(csvStream)[0]
         // High mean motion (15.9) + high drag (.05) + old epoch → should be decayed by now
         assert(sat.hasDecayed(System.currentTimeMillis()))
     }
 
     @Test
     fun `Given invalid CSV stream returns empty list`() = runTest(testDispatcher) {
-        assert(dataParser.parseCSVStream(invalidCSVStream).isEmpty())
+        assert(dataParser.parseCSV(invalidCSVStream).isEmpty())
     }
 
     @Test
     fun `Given valid TLE stream returns valid data`() = runTest(testDispatcher) {
-        val parsedList = dataParser.parseTLEStream(validTLEStream)
+        val parsedList = dataParser.parseTLE(validTLEStream)
         assert(parsedList.size == 2)
         assert(parsedList[0].epoch == 21320.51955234)
         assert(parsedList[1].epoch == 24069.23963816)
@@ -125,8 +125,8 @@ class DataParserTest {
             ISS (ZARYA)
             1 25544U 98067A   21320.51955234  .00001288  00000+0  31985-4 0  9990
             2 25544  51.6447 309.4881 0004694 203.6966 299.8876 15.48582035312205
-        """.trimIndent().byteInputStream()
-        val sat = dataParser.parseTLEStream(tleStream)[0]
+        """.trimIndent()
+        val sat = dataParser.parseTLE(tleStream)[0]
         assert(sat.name == "ISS (ZARYA)")
         assert(sat.catnum == 25544)
         assert(sat.meanmo == 15.48582035)
@@ -144,27 +144,27 @@ class DataParserTest {
             ISS (ZARYA)
             1 25544U 98067A   21320.51955234  .00001288  00000+0  31985-4 0  9990
             2 25544  51.6447 309.4881 0004694 203.6966 299.8876 15.48582035312205
-        """.trimIndent().byteInputStream()
-        val sat = dataParser.parseTLEStream(tleStream)[0]
+        """.trimIndent()
+        val sat = dataParser.parseTLE(tleStream)[0]
         assert(!sat.hasDecayed(System.currentTimeMillis()))
     }
 
     @Test
     fun `Given invalid TLE stream returns empty list`() = runTest(testDispatcher) {
-        assert(dataParser.parseTLEStream(invalidTLEStream).isEmpty())
+        assert(dataParser.parseTLE(invalidTLEStream).isEmpty())
     }
 
     @Test
     fun `Given valid JSON stream returns valid data`() = runTest(testDispatcher) {
-        assert(dataParser.parseJSONStream(validJSONStream)[0].downlinkLow == 136658500L)
+        assert(dataParser.parseJSON(validJSONStream)[0].downlinkLow == 136658500L)
     }
 
     @Test
     fun `Given valid JSON stream all radio fields are parsed correctly`() = runTest(testDispatcher) {
         val jsonStream = """
             [{"uuid":"UzPz4gcsNBPKPKAFPmer7g","description":"Upper side band (drifting)","alive":true,"type":"Transmitter","uplink_low":145900000,"uplink_high":146000000,"uplink_drift":null,"downlink_low":136658500,"downlink_high":136700000,"downlink_drift":null,"mode":"USB","mode_id":9,"uplink_mode":"FM","invert":true,"baud":null,"sat_id":"SCHX-0895-2361-9925-0309","norad_cat_id":965,"status":"active","updated":"2019-04-18T05:39:53.343316Z","citation":"CITATION NEEDED","service":"Unknown","coordination":"","coordination_url":""}]
-        """.trimIndent().byteInputStream()
-        val radio = dataParser.parseJSONStream(jsonStream)[0]
+        """.trimIndent()
+        val radio = dataParser.parseJSON(jsonStream)[0]
         assert(radio.uuid == "UzPz4gcsNBPKPKAFPmer7g")
         assert(radio.info == "Upper side band (drifting)")
         assert(radio.isAlive)
@@ -182,8 +182,8 @@ class DataParserTest {
     fun `Given JSON with null optional fields parses without error`() = runTest(testDispatcher) {
         val jsonStream = """
             [{"uuid":"abc123","description":"Beacon","alive":false,"type":"Transmitter","uplink_low":null,"uplink_high":null,"uplink_drift":null,"downlink_low":145800000,"downlink_high":null,"downlink_drift":null,"mode":null,"mode_id":null,"uplink_mode":null,"invert":false,"baud":null,"sat_id":"TEST","norad_cat_id":12345,"status":"active","updated":"2024-01-01T00:00:00Z","citation":"","service":"Unknown","coordination":"","coordination_url":""}]
-        """.trimIndent().byteInputStream()
-        val radio = dataParser.parseJSONStream(jsonStream)[0]
+        """.trimIndent()
+        val radio = dataParser.parseJSON(jsonStream)[0]
         assert(radio.uuid == "abc123")
         assert(!radio.isAlive)
         assert(radio.downlinkLow == 145800000L)
@@ -198,12 +198,12 @@ class DataParserTest {
 
     @Test
     fun `Given invalid JSON stream returns empty list`() = runTest(testDispatcher) {
-        assert(dataParser.parseJSONStream(invalidJSONStream).isEmpty())
+        assert(dataParser.parseJSON(invalidJSONStream).isEmpty())
     }
 
     @Test
     fun `Given valid data streams parsed results match`() = runTest(testDispatcher) {
-        assert(dataParser.parseCSVStream(validCSVStream) == dataParser.parseTLEStream(validTLEStream))
+        assert(dataParser.parseCSV(validCSVStream) == dataParser.parseTLE(validTLEStream))
     }
 
     @Test
