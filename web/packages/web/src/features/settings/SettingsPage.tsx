@@ -18,6 +18,15 @@ export function SettingsPage() {
   const store = useSettingsStore();
   const { otherSettings, stationPosition, databaseState, dataSourcesSettings } = store;
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
+  const [updateMsgIsError, setUpdateMsgIsError] = useState(false);
+  const showMsg = (msg: string | null) => {
+    setUpdateMsg(msg);
+    setUpdateMsgIsError(false);
+  };
+  const showError = (msg: string) => {
+    setUpdateMsg(msg);
+    setUpdateMsgIsError(true);
+  };
   const [gpsMsg, setGpsMsg] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [manualLat, setManualLat] = useState(stationPosition.latitude.toString());
@@ -50,13 +59,13 @@ export function SettingsPage() {
 
   const handleUpdate = async () => {
     setUpdating(true);
-    setUpdateMsg('Downloading all satellites...');
+    showMsg('Downloading all satellites...');
     try {
       // Step 1: Download all active satellites (bulk orbital data)
       const allResult = await fetchAndStoreSatelliteData();
       if (allResult.errors.length > 0) {
         const firstError = allResult.errors[0];
-        setUpdateMsg(
+        showError(
           `Update failed: ${firstError} ` +
             (firstError.includes('HTTP 5') || firstError.includes('HTTP 429')
               ? 'Celestrak may be temporarily unavailable — wait a minute and try again.'
@@ -66,7 +75,7 @@ export function SettingsPage() {
         return;
       }
       if (allResult.inserted === 0 && !allResult.upToDate) {
-        setUpdateMsg('No new satellites found.');
+        showMsg('No new satellites found.');
         setUpdating(false);
         return;
       }
@@ -75,15 +84,15 @@ export function SettingsPage() {
       // user defined any, otherwise the built-in Celestrak groups), downloading
       // in parallel and skipping groups that are already tagged.
       const tagResult = await fetchAndTagCategories(undefined, 4, (done, total, current) => {
-        setUpdateMsg(`Tagging satellites (${done}/${total})… ${current}`);
+        showMsg(`Tagging satellites (${done}/${total})… ${current}`);
       });
 
-      setUpdateMsg(
+      showMsg(
         `${allResult.inserted} satellites updated, ${tagResult.tagged} category tags applied` +
           ` (${tagResult.skipped} already tagged, ${tagResult.errors} group fetch(es) failed).`,
       );
     } catch {
-      setUpdateMsg('Update failed. Check console.');
+      showError('Update failed. Check console.');
     }
     setUpdating(false);
   };
@@ -99,23 +108,23 @@ export function SettingsPage() {
         numberOfRadios: radioCount,
         updateTimestamp: Date.now(),
       });
-      setUpdateMsg(
+      showMsg(
         count > 0
           ? `Imported ${count} satellites from ${file.name}.`
           : `No satellites parsed from ${file.name} — expected a TLE (.txt) or OMM/CSV (.csv) file.`,
       );
     } catch (err) {
-      setUpdateMsg(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
+      showError(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
     }
     setUpdating(false);
   };
 
   const handleFetchTransceivers = async () => {
     setUpdating(true);
-    setUpdateMsg('Downloading transceiver data...');
+    showMsg('Downloading transceiver data...');
     try {
       const radios = await fetchTransceivers();
-      setUpdateMsg(`${radios.length} transceivers loaded.`);
+      showMsg(`${radios.length} transceivers loaded.`);
       const [satCount, radioCount] = await Promise.all([db.entries.count(), db.radios.count()]);
       store.updateDatabaseState({
         numberOfSatellites: satCount,
@@ -123,7 +132,7 @@ export function SettingsPage() {
         updateTimestamp: Date.now(),
       });
     } catch {
-      setUpdateMsg('Transceiver fetch failed.');
+      showError('Transceiver fetch failed.');
     }
     setUpdating(false);
   };
@@ -182,7 +191,7 @@ export function SettingsPage() {
             📍 Get GPS Position
           </button>
           {gpsMsg && (
-            <div className={styles.updateMsg} style={{ marginTop: 8 }}>
+            <div className={styles.updateMsg}>
               {gpsMsg}
             </div>
           )}
@@ -258,18 +267,17 @@ export function SettingsPage() {
             onClick={handleUpdate}
             disabled={updating}
           >
-            {updating ? '⏳ Updating...' : '⬇ Update from Celestrak'}
+            {updating ? '⏳ Updating...' : '⬇ Update satellite data'}
           </button>
           <button
             className={styles.btn}
             onClick={handleFetchTransceivers}
             disabled={updating}
-            style={{ marginTop: 8 }}
           >
             {updating ? '⏳ Loading...' : '📻 Fetch Transceivers'}
           </button>
           {updateMsg && (
-            <div className={styles.updateMsg}>{updateMsg}</div>
+            <div className={`${styles.updateMsg} ${updateMsgIsError ? styles.updateMsgError : ''}`}>{updateMsg}</div>
           )}
 
           <div className={styles.categoryButtons}>
@@ -283,12 +291,12 @@ export function SettingsPage() {
                   disabled={updating}
                   onClick={async () => {
                     setUpdating(true);
-                    setUpdateMsg(null);
+                    showMsg(null);
                     const result = await fetchAndStoreSatelliteData([url], cat);
                     if (result.errors.length > 0) {
-                      setUpdateMsg(`${cat}: ${result.errors[0]}`);
+                      showError(`${cat}: ${result.errors[0]}`);
                     } else {
-                      setUpdateMsg(`${cat}: ${result.message}`);
+                      showMsg(`${cat}: ${result.message}`);
                     }
                     setUpdating(false);
                   }}
@@ -337,8 +345,7 @@ export function SettingsPage() {
           {sources.map((source, i) => (
             <div key={i} className={styles.sourceRow}>
               <input
-                className={styles.posInput}
-                style={{ flex: 1 }}
+                className={styles.sourceNameInput}
                 value={source.name}
                 placeholder="Name (category tag)"
                 onChange={(e) => {
@@ -349,8 +356,7 @@ export function SettingsPage() {
                 }}
               />
               <input
-                className={styles.posInput}
-                style={{ flex: 2 }}
+                className={styles.sourceUrlInput}
                 value={source.url}
                 placeholder="https://... (TLE or CSV URL)"
                 onChange={(e) => {
@@ -373,7 +379,7 @@ export function SettingsPage() {
           ))}
           <div className={styles.sourceRow}>
             <button
-              className={styles.smallBtn}
+              className={buttons.actionBtn}
               onClick={() => {
                 setSources((prev) => [...prev, { name: '', url: '' }]);
                 setSourcesSaved(false);
@@ -395,7 +401,7 @@ export function SettingsPage() {
               Save sources
             </button>
             {sourcesSaved && (
-              <span className={styles.updateMsg} style={{ marginLeft: 8 }}>
+              <span className={styles.savedMsg}>
                 Saved ✓
               </span>
             )}

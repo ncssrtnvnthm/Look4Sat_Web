@@ -80,12 +80,10 @@
 }
 
 .emptyState {
-  margin: 16px;
-  padding: 16px;
+  margin: 16px 16px 0;
+  padding: 32px;
   text-align: center;
   color: var(--color-on-surface-variant);
-  background: var(--color-surface-container);
-  border-radius: 12px;
   font-size: 14px;
 }
 
