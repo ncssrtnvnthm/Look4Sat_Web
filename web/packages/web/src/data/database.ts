@@ -64,6 +64,9 @@ export async function getAllEntriesWithCategories(): Promise<SatEntryWithCategor
 /**
  * Merge new entries into the database, preserving existing categories
  * and adding the new category tag without overwriting existing ones.
+ * The read (existing categories) + write (merged tags) run inside ONE
+ * transaction, so concurrent calls (parallel category tagging) can't
+ * interleave and silently drop each other's tags (M4).
  */
 export async function mergeEntries(entries: OrbitalData[], category: string): Promise<void> {
   // Skip rows without a valid catalog number — a NaN key would make the
@@ -71,18 +74,20 @@ export async function mergeEntries(entries: OrbitalData[], category: string): Pr
   const valid = entries.filter((e) => Number.isFinite(e.catnum) && e.catnum > 0);
   if (valid.length === 0) return;
 
-  const existing = await db.entries.bulkGet(valid.map(e => e.catnum));
-  const existingMap = new Map(existing.filter(Boolean).map(e => [e!.catnum, e!]));
+  await db.transaction('rw', db.entries, async () => {
+    const existing = await db.entries.bulkGet(valid.map(e => e.catnum));
+    const existingMap = new Map(existing.filter(Boolean).map(e => [e!.catnum, e!]));
 
-  await db.entries.bulkPut(
-    valid.map((data) => {
-      const prev = existingMap.get(data.catnum);
-      const categories = prev
-        ? [...new Set([...prev.categories, category])]
-        : [category];
-      return { catnum: data.catnum, name: data.name, categories, data };
-    }),
-  );
+    await db.entries.bulkPut(
+      valid.map((data) => {
+        const prev = existingMap.get(data.catnum);
+        const categories = prev
+          ? [...new Set([...prev.categories, category])]
+          : [category];
+        return { catnum: data.catnum, name: data.name, categories, data };
+      }),
+    );
+  });
 }
 
 export async function deleteAllEntries(): Promise<void> {

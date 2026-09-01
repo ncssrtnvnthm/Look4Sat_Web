@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { quaternionToHeading, computeMagDeclination } from './compass';
+import { quaternionToHeading, computeMagDeclination, deviceHeading } from './compass';
 
 describe('quaternionToHeading', () => {
   it('identity quaternion points north (0°)', () => {
@@ -36,5 +36,38 @@ describe('computeMagDeclination', () => {
   it('handles the equator', () => {
     const d = computeMagDeclination(0, 0);
     expect(Number.isFinite(d)).toBe(true);
+  });
+});
+
+describe('deviceHeading', () => {
+  it('iOS webkitCompassHeading is magnetic — adds declination for true north', () => {
+    const res = deviceHeading(90, null, undefined, 2.5, false);
+    expect(res.heading).toBeCloseTo(92.5, 9);
+  });
+
+  it('absolute alpha is already true-north — used as-is', () => {
+    const res = deviceHeading(null, 90, true, 2.5, false);
+    expect(res.heading).toBeCloseTo(90, 9);
+    expect(res.sawAbsolute).toBe(true);
+  });
+
+  it('relative alpha is a fallback, ignored once an absolute reading was seen', () => {
+    const first = deviceHeading(null, 90, true, 0, false);
+    const second = deviceHeading(null, 45, false, 0, first.sawAbsolute);
+    expect(second.heading).toBeNull();
+  });
+
+  it('relative alpha tracked only until absolute arrives', () => {
+    const res = deviceHeading(null, 45, false, 0, false);
+    expect(res.heading).toBeCloseTo(45, 9);
+    expect(res.sawAbsolute).toBe(false);
+  });
+
+  it('normalizes to [0, 360)', () => {
+    expect(deviceHeading(359, null, undefined, 2, false).heading).toBeCloseTo(1, 9);
+  });
+
+  it('ignores events with no heading data', () => {
+    expect(deviceHeading(null, null, undefined, 0, false).heading).toBeNull();
   });
 });

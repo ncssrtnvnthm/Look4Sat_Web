@@ -37,6 +37,17 @@ const satIcon = L.divIcon({
   iconAnchor: [7, 7],
 });
 
+const EARTH_RADIUS_M = 6_371_000;
+
+/** Ground footprint radius (meters) for a satellite at the given altitude (km). */
+function footprintRadius(altKm: number | null): number {
+  if (altKm == null || !Number.isFinite(altKm) || altKm <= 0) return 800_000;
+  const r = EARTH_RADIUS_M;
+  const h = altKm * 1000;
+  const theta = Math.acos(Math.min(1, r / (r + h)));
+  return r * theta;
+}
+
 function StationClickHandler({
   active,
   onSetPosition,
@@ -209,7 +220,7 @@ export function MapPage() {
               </Marker>
               <Circle
                 center={[satLat, satLon]}
-                radius={800000}
+                radius={footprintRadius(store.satAlt)}
                 pathOptions={{ color: '#4fc3f7', fillOpacity: 0.03, weight: 1 }}
               />
             </>

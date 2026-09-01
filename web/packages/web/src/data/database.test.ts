@@ -63,3 +63,27 @@ describe('mergeEntries', () => {
     expect(all.map((e) => e.catnum)).toEqual([2]);
   });
 });
+
+describe('mergeEntries concurrency (parallel category tagging)', () => {
+  it('preserves tags when multiple groups merge the same satellite concurrently', async () => {
+    const satA = makeSat(1, 'SAT A');
+    await Promise.all([
+      mergeEntries([satA], 'Cubesat'),
+      mergeEntries([satA], 'Amateur'),
+      mergeEntries([satA], 'Starlink'),
+    ]);
+    const all = await getAllEntriesWithCategories();
+    expect(all).toHaveLength(1);
+    expect([...all[0].categories].sort()).toEqual(['Amateur', 'Cubesat', 'Starlink']);
+  });
+
+  it('keeps disjoint satellites distinct under concurrent merges', async () => {
+    await Promise.all([
+      mergeEntries([makeSat(1, 'SAT A')], 'Cubesat'),
+      mergeEntries([makeSat(2, 'SAT B')], 'Amateur'),
+      mergeEntries([makeSat(3, 'SAT C')], 'Starlink'),
+    ]);
+    const all = await getAllEntriesWithCategories();
+    expect(all.map((e) => e.catnum).sort()).toEqual([1, 2, 3]);
+  });
+});

@@ -54,7 +54,8 @@ export function RadarView({
 
     const centerX = width / 2;
     const centerY = height / 2;
-    const radius = Math.min(width, height) / 2 - 32 * dpr;
+    // Guard against a tiny container making the radius negative (ctx.arc would throw).
+    const radius = Math.max(0, Math.min(width, height) / 2 - 32 * dpr);
 
     ctx.clearRect(0, 0, width, height);
     ctx.save();
@@ -219,7 +220,9 @@ export function RadarView({
   }, [satellitePos, track, compassAzimuth, compassElevation, shouldShowSweep, shouldUseCompass, sunPosition, moonPosition]);
 
   useEffect(() => {
-    lastFrameRef.current = 0;
+    // Don't reset lastFrameRef here: draw() treats 0 as "first frame" and a
+    // reset on every prop change would make the next frame's dt huge, making
+    // the sweep angle jump (m14).
     animFrameRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animFrameRef.current);
   }, [draw]);

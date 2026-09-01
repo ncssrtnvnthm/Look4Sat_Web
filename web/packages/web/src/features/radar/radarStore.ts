@@ -4,7 +4,16 @@ import { useSettingsStore, useSelectedStore, getAdjustedTime } from '../../data/
 import { getEntriesWithIds, getRadiosWithId } from '../../data/database';
 import { getPosition, getSunPosition, getMoonPosition, calculatePasses } from '../../domain/wasmBridge';
 import { formatTimer } from '../../lib/time';
-import { quaternionToHeading, computeMagDeclination } from '../../lib/compass';
+import { quaternionToHeading, computeMagDeclination, deviceHeading } from '../../lib/compass';
+
+/**
+ * Keep passes still in the air or upcoming (losTime > now). The bridge reports
+ * a pass already in progress at fetch time with aosTime = now, so filtering by
+ * `aosTime > now` would wrongly drop it (M1). Exported for tests.
+ */
+export function filterUpcomingPasses<T extends { losTime: number }>(passes: T[], now: number): T[] {
+  return passes.filter((p) => p.losTime > now);
+}
 
 interface RadarState {
   currentPass: OrbitalPass | null;
@@ -103,7 +112,10 @@ export const useRadarStore = create<RadarState>()((set, get) => ({
     if (selectedIds.length > 0) {
       getEntriesWithIds(selectedIds).then(async (entries) => {
         if (entries.length > 0 && get()._ticking) {
-          const startIdx = Math.min(useSelectedStore.getState().viewedSatIndex, entries.length - 1);
+          // viewedSatIndex indexes into selectedIds; match by catalog number so
+          // entries missing from the DB don't shift the selection (m11).
+          const viewedId = selectedIds[Math.min(useSelectedStore.getState().viewedSatIndex, selectedIds.length - 1)];
+          const startIdx = Math.max(0, entries.findIndex((e) => e.catnum === viewedId));
           set({ _satellites: entries, _satIndex: startIdx });
           await selectAndLoadSat(entries[startIdx]);
         }
@@ -130,6 +142,8 @@ export const useRadarStore = create<RadarState>()((set, get) => ({
 
   stopRadar: () => {
     set({ _ticking: false });
+    tickToken++; // invalidate any pending/in-flight ticks
+    trackToken++; // invalidate any in-flight track computation
     stopCompassSensor();
   },
 
@@ -182,12 +196,16 @@ export const useRadarStore = create<RadarState>()((set, get) => ({
 }));
 
 /** Compute satellite track positions from AOS to LOS at 15-second intervals.
- *  Ported from Android SatelliteRepo.getTrack(). */
+ *  Ported from Android SatelliteRepo.getTrack(). Cancelled by selectAndLoadSat
+ *  (token) so a stale track can't overwrite the current satellite's. */
+let trackToken = 0;
+
 async function computeRadarTrack(
   orbitalDataJson: string,
   lat: number, lon: number, alt: number,
   aosTime: number, losTime: number,
 ) {
+  const token = ++trackToken;
   const track: OrbitalPos[] = [];
   const stepMs = 15000;
   for (let t = aosTime; t <= losTime; t += stepMs) {
@@ -212,11 +230,13 @@ async function computeRadarTrack(
       }
     } catch { /* skip */ }
   }
+  if (token !== trackToken) return;
   useRadarStore.setState({ satTrack: track });
 }
 
 /** Load passes and radios for a satellite, then start ticking. */
 async function selectAndLoadSat(sat: OrbitalData) {
+  trackToken++; // cancel any in-flight track for a previously selected satellite
   const orbitalDataJson = JSON.stringify(sat);
   const { latitude, longitude, altitude } = useSettingsStore.getState().stationPosition;
   const [passes, radios] = await Promise.all([
@@ -233,28 +253,54 @@ async function selectAndLoadSat(sat: OrbitalData) {
   });
 }
 
-// ── Self-scheduling tick loop (avoids setInterval race conditions) ──
+// ── Self-scheduling tick loop ──
+// A monotonic token drops ticks from a previous loop, so stop→start
+// (navigation away/back, StrictMode remounts) can never run two loops.
+
+let tickToken = 0;
 
 function scheduleTick() {
-  setTimeout(() => runTick(), 1000);
+  const token = tickToken;
+  setTimeout(() => {
+    if (token === tickToken) runTick();
+  }, 1000);
 }
 
 async function runTick() {
   const state = get();
   if (!state._ticking) return;
+  const token = tickToken;
 
   const { currentPass, _orbitalDataJson } = state;
   const now = getAdjustedTime();
   const settings = useSettingsStore.getState();
   const { latitude, longitude, altitude } = settings.stationPosition;
 
-  // If no pass yet, wait
-  if (!currentPass || !_orbitalDataJson) {
+  // No satellite data yet — wait
+  if (!_orbitalDataJson) {
     scheduleTick();
     return;
   }
 
-  let { aosTime, losTime } = currentPass;
+  // No pass scheduled — refetch so a pass appearing in the rolling window is
+  // picked up instead of dead-ending permanently (M1).
+  if (!currentPass) {
+    const fresh = await fetchPasses(_orbitalDataJson, latitude, longitude, altitude);
+    if (token !== tickToken) return;
+    const nextPass = fresh[0] || null;
+    useRadarStore.setState({
+      currentPass: nextPass,
+      _upcomingPasses: fresh,
+      currentTime: nextPass ? formatTimer(nextPass.aosTime - now) : '--:--:--',
+      isTimeAos: true,
+      orbitalPos: null,
+      satTrack: [],
+    });
+    scheduleTick();
+    return;
+  }
+
+  const { aosTime, losTime } = currentPass;
 
   // If current pass ended, advance to next real pass or refetch
   if (now > losTime) {
@@ -263,12 +309,13 @@ async function runTick() {
     while (upcoming.length > 0 && upcoming[0].losTime <= now) {
       upcoming = upcoming.slice(1);
     }
-    // Refetch if running low
-    if (upcoming.length < 2 && _orbitalDataJson) {
-      const { latitude, longitude, altitude } = settings.stationPosition;
+    // Refetch if running low — keep passes still in the air (losTime > now),
+    // because the bridge reports a pass already in progress with aosTime = now,
+    // which a strict `aosTime > now` filter would wrongly drop (M1).
+    if (upcoming.length < 2) {
       const fresh = await fetchPasses(_orbitalDataJson, latitude, longitude, altitude);
-      // Merge: keep fresh passes that start after now
-      upcoming = fresh.filter((p) => p.aosTime > now);
+      if (token !== tickToken) return;
+      upcoming = filterUpcomingPasses(fresh, now);
     }
     const nextPass = upcoming[0] || null;
     useRadarStore.setState({
@@ -296,6 +343,7 @@ async function runTick() {
   // In pass — get live position
   try {
     const response = await getPosition(_orbitalDataJson, latitude, longitude, altitude, now);
+    if (token !== tickToken) return;
     if (response.type === 'getPosition' && response.result) {
       const pos = response.result;
 
@@ -336,6 +384,7 @@ async function runTick() {
         getSunPosition(latitude, longitude, now),
         getMoonPosition(latitude, longitude, now),
       ]);
+      if (token !== tickToken) return;
       const updates: Partial<RadarState> = {};
       if (sunResp.type === 'getSunPosition') updates.sunPosition = sunResp.result;
       if (moonResp.type === 'getMoonPosition') updates.moonPosition = moonResp.result;
@@ -439,6 +488,7 @@ function stopCompassSensor() {
 
 function startLegacyCompass() {
   if ('DeviceOrientationEvent' in window) {
+    hasAbsoluteReading = false;
     window.addEventListener('deviceorientation', handleOrientation);
     window.addEventListener('deviceorientationabsolute', handleOrientation as any);
     console.log('[compass] Using legacy deviceorientation events');
@@ -451,16 +501,22 @@ function startLegacyCompass() {
 
 // ── Legacy deviceorientation handler (fallback for older browsers) ──
 
+// Android fires both deviceorientation (absolute=false) and
+// deviceorientationabsolute (absolute=true); prefer the absolute readings so
+// the heading doesn't alternate between true-north and device-relative values.
+let hasAbsoluteReading = false;
+
 function handleOrientation(e: DeviceOrientationEvent) {
-  let heading: number;
-  if (e.webkitCompassHeading != null) {
-    heading = e.webkitCompassHeading;
-  } else if (e.alpha != null) {
-    heading = e.absolute ? e.alpha + getMagDeclination() : e.alpha;
-  } else {
-    return;
-  }
-  useRadarStore.setState({ orientationValues: [heading % 360, 0] });
+  const result = deviceHeading(
+    e.webkitCompassHeading,
+    e.alpha,
+    e.absolute,
+    getMagDeclination(),
+    hasAbsoluteReading,
+  );
+  if (result.heading == null) return;
+  hasAbsoluteReading = result.sawAbsolute;
+  useRadarStore.setState({ orientationValues: [result.heading, 0] });
 }
 
 // ── Magnetic declination (cached; math lives in lib/compass.ts) ──

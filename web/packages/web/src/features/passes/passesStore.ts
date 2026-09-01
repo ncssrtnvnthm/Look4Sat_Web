@@ -69,7 +69,10 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
       }
 
       const entries = await getEntriesWithIds(selectedIds);
-      if (token !== refreshToken) return;
+      if (token !== refreshToken) {
+        set({ isRefreshing: false });
+        return;
+      }
       const { latitude, longitude, altitude } = settings.stationPosition;
       const { hours: hoursAhead, elevation: minElevation, showDeepSpace } = get();
       const now = getAdjustedTime();
@@ -99,7 +102,10 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
             ),
           ),
         );
-        if (token !== refreshToken) return;
+        if (token !== refreshToken) {
+          set({ isRefreshing: false });
+          return;
+        }
 
         for (const result of results) {
           if (result.status === 'fulfilled' && result.value.type === 'calculatePasses') {
@@ -226,6 +232,8 @@ export const usePassesStore = create<PassesState>()((set, get) => ({
 
   cancelRefresh: () => {
     refreshToken++;
+    // Hide the progress UI immediately; the in-flight run is token-guarded.
+    set({ isRefreshing: false });
   },
 
   dismissWhatsNew: () => {

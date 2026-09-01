@@ -96,16 +96,18 @@ private fun Double.sanitize(): Double = when {
 }
 
 // ── Cached OrbitalObject to avoid re-parsing on every tick ──
+// Keyed by the exact serialized payload (not just catnum), so a Celestrak
+// refresh that rewrites a satellite's elements is picked up immediately (M6).
 
 private var cachedObject: OrbitalObject? = null
-private var cachedCatnum: Int = -1
+private var cachedJson: String? = null
 
 private fun getOrCreateObject(jsonOrbitalData: String): OrbitalObject? {
     return try {
-        val data = bridgeJson.decodeFromString<OrbitalData>(jsonOrbitalData)
-        if (data.catnum != cachedCatnum) {
+        if (jsonOrbitalData != cachedJson) {
+            val data = bridgeJson.decodeFromString<OrbitalData>(jsonOrbitalData)
             cachedObject = data.getObject()
-            cachedCatnum = data.catnum
+            cachedJson = jsonOrbitalData
         }
         cachedObject
     } catch (e: Exception) {

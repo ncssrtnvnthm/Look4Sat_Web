@@ -58,9 +58,12 @@ export const useMapStore = create<MapState>()((set, get) => ({
       selectedIndex: 0,
     });
 
-    // Start at the shared viewed index if valid
-    if (allSatellites.length > 0) {
-      const sharedIdx = Math.min(useSelectedStore.getState().viewedSatIndex, allSatellites.length - 1);
+    // Start at the shared viewed index if valid, matching by catalog number
+    // (viewedSatIndex indexes into selectedIds; entries may be missing ids).
+    // Skip if the user already switched satellites while initMap was loading (m10).
+    if (allSatellites.length > 0 && !mapSelectionChanged) {
+      const viewedId = selectedIds[Math.min(useSelectedStore.getState().viewedSatIndex, selectedIds.length - 1)];
+      const sharedIdx = Math.max(0, allSatellites.findIndex((e) => e.catnum === viewedId));
       set({ selectedIndex: sharedIdx, selectedSat: allSatellites[sharedIdx] });
       computeTrack(allSatellites[sharedIdx], settings.stationPosition);
     }
@@ -72,14 +75,17 @@ export const useMapStore = create<MapState>()((set, get) => ({
   startTicking: () => {
     if (get()._ticking) return;
     set({ _ticking: true });
+    mapTickToken++; // invalidate any loop left over from a previous mount
     scheduleMapTick();
   },
 
   stopTicking: () => {
     set({ _ticking: false });
+    mapTickToken++;
   },
 
   selectPrev: () => {
+    mapSelectionChanged = true;
     const { allSatellites, selectedIndex } = get();
     if (allSatellites.length === 0) return;
     const idx = (selectedIndex - 1 + allSatellites.length) % allSatellites.length;
@@ -90,6 +96,7 @@ export const useMapStore = create<MapState>()((set, get) => ({
   },
 
   selectNext: () => {
+    mapSelectionChanged = true;
     const { allSatellites, selectedIndex } = get();
     if (allSatellites.length === 0) return;
     const idx = (selectedIndex + 1) % allSatellites.length;
@@ -100,6 +107,7 @@ export const useMapStore = create<MapState>()((set, get) => ({
   },
 
   selectSatellite: (index: number) => {
+    mapSelectionChanged = true;
     const { allSatellites } = get();
     if (index < 0 || index >= allSatellites.length) return;
     const sat = allSatellites[index];
@@ -109,13 +117,22 @@ export const useMapStore = create<MapState>()((set, get) => ({
   },
 }));
 
+// Guards: monotonic token drops ticks from a previous loop (same pattern as
+// radarStore); flag prevents initMap from clobbering an in-flight selection.
+let mapTickToken = 0;
+let mapSelectionChanged = false;
+
 function scheduleMapTick() {
-  setTimeout(() => runMapTick(), 1000);
+  const token = mapTickToken;
+  setTimeout(() => {
+    if (token === mapTickToken) runMapTick();
+  }, 1000);
 }
 
 async function runMapTick() {
   const state = useMapStore.getState();
   if (!state._ticking) return;
+  const token = mapTickToken;
 
   const { selectedSat } = state;
   const stationPosition = useSettingsStore.getState().stationPosition;
@@ -144,6 +161,7 @@ async function runMapTick() {
   // Update sun/moon every 60s
   if (Date.now() - state._lastSunMoonUpdate > 60000) {
     useMapStore.setState({ _lastSunMoonUpdate: Date.now() });
+    if (token !== mapTickToken) return;
     updateSunMoon();
   }
 

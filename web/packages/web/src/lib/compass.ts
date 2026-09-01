@@ -61,3 +61,35 @@ export function computeMagDeclination(lat: number, lon: number): number {
 
   return Math.atan2(y, x) * 180 / Math.PI;
 }
+
+export interface HeadingResult {
+  /** True-north heading in degrees [0, 360), or null when the event should be ignored. */
+  heading: number | null;
+  /** True once an absolute reading has been seen (relative readings are then ignored). */
+  sawAbsolute: boolean;
+}
+
+/**
+ * Convert a DeviceOrientationEvent reading into a true-north heading.
+ * - iOS webkitCompassHeading is magnetic → add the declination.
+ * - Absolute alpha is already true-north per the spec → use as-is.
+ * - Relative alpha is a device-relative rotation → used only as a fallback
+ *   until an absolute reading arrives (Android fires both event types).
+ */
+export function deviceHeading(
+  webkitCompassHeading: number | null | undefined,
+  alpha: number | null | undefined,
+  absolute: boolean | undefined,
+  declinationDeg: number,
+  sawAbsolute: boolean,
+): HeadingResult {
+  const normalize = (deg: number) => ((deg % 360) + 360) % 360;
+
+  if (webkitCompassHeading != null) {
+    return { heading: normalize(webkitCompassHeading + declinationDeg), sawAbsolute };
+  }
+  if (alpha == null) return { heading: null, sawAbsolute };
+  if (absolute) return { heading: normalize(alpha), sawAbsolute: true };
+  if (sawAbsolute) return { heading: null, sawAbsolute };
+  return { heading: normalize(alpha), sawAbsolute };
+}
