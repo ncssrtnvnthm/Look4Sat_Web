@@ -37,7 +37,13 @@ export function SettingsPage() {
       // Step 1: Download all active satellites (bulk orbital data)
       const allResult = await fetchAndStoreSatelliteData();
       if (allResult.errors.length > 0) {
-        setUpdateMsg(`Update finished with ${allResult.errors.length} error(s): ${allResult.errors[0]}`);
+        const firstError = allResult.errors[0];
+        setUpdateMsg(
+          `Update failed: ${firstError} ` +
+            (firstError.includes('HTTP 5') || firstError.includes('HTTP 429')
+              ? 'Celestrak may be temporarily unavailable — wait a minute and try again.'
+              : 'Check the URL and your connection, then try again.'),
+        );
         setUpdating(false);
         return;
       }

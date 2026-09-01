@@ -243,6 +243,24 @@ class HttpStatusError extends Error {
 /** Statuses Celestrak returns transiently under load; safe to retry with backoff. */
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
+/** Backoff delays (ms) between retry attempts. */
+const RETRY_DELAYS_MS = [1000, 2000, 4000];
+
+/**
+ * Build a compact, human-readable message for a non-OK HTTP response.
+ * HTML error pages (e.g. Celestrak's 500 page) are reduced to their title
+ * instead of dumping raw markup into the UI.
+ */
+export function describeHttpError(status: number, body: string): string {
+  const trimmed = (body || '').trim();
+  if (!trimmed) return `HTTP ${status}`;
+  if (trimmed.startsWith('<')) {
+    const title = trimmed.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim();
+    return title ? `HTTP ${status}: ${title}` : `HTTP ${status} (server error page)`;
+  }
+  return `HTTP ${status}: ${trimmed.slice(0, 200)}`;
+}
+
 async function fetchText(url: string): Promise<string> {
   // ZIP sources (Classified, McCants) not supported in browser — reject before downloading.
   if (url.endsWith('.zip')) {
@@ -250,12 +268,13 @@ async function fetchText(url: string): Promise<string> {
   }
   const finalUrl = celestrakUrl(url);
 
-  // Celestrak occasionally answers 503 on the first request (load / new connection);
-  // retrying with a short backoff almost always succeeds.
+  // Celestrak occasionally answers 5xx on the first request (load / new
+  // connection); retry transient statuses with an escalating backoff so a
+  // brief outage is ridden out instead of failing the update.
   let lastErr: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, 1000 * attempt));
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt - 1]));
     }
     try {
       const resp = await fetch(finalUrl);
@@ -265,7 +284,7 @@ async function fetchText(url: string): Promise<string> {
         if (resp.status === 403 && body.includes('has not updated')) {
           throw new DataUpToDateError(body.trim());
         }
-        throw new HttpStatusError(resp.status, `HTTP ${resp.status}: ${body.slice(0, 200)}`);
+        throw new HttpStatusError(resp.status, describeHttpError(resp.status, body));
       }
       return await resp.text();
     } catch (err) {
@@ -275,7 +294,7 @@ async function fetchText(url: string): Promise<string> {
         err instanceof HttpStatusError
           ? RETRYABLE_STATUSES.has(err.status)
           : err instanceof TypeError; // fetch network errors
-      if (!transient || attempt === 2) throw err;
+      if (!transient || attempt === RETRY_DELAYS_MS.length) throw err;
       console.warn(
         `[fetch] ${finalUrl} failed (${err instanceof Error ? err.message : err}); retrying…`,
       );

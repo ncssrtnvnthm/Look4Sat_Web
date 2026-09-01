@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseCSV, parseTLE, celestrakUrl, validateAllCatalogSize, SATELLITE_DATA_URLS } from './satelliteData';
+import { parseCSV, parseTLE, celestrakUrl, validateAllCatalogSize, describeHttpError, SATELLITE_DATA_URLS } from './satelliteData';
 
 const CSV_HEADER =
   'OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT';
@@ -124,5 +124,27 @@ describe('validateAllCatalogSize', () => {
 
   it('does not apply the floor to small category downloads', () => {
     expect(validateAllCatalogSize('https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=csv', 300)).toBeNull();
+  });
+});
+
+describe('describeHttpError', () => {
+  it('reduces an HTML error page to its title', () => {
+    const html = '<!DOCTYPE html><html><head><meta charset="iso-8859-1"/><title>500 - Internal Server Error</title></head><body>...</body></html>';
+    expect(describeHttpError(500, html)).toBe('HTTP 500: 500 - Internal Server Error');
+  });
+
+  it('handles HTML without a title', () => {
+    expect(describeHttpError(502, '<html><body>oops</body></html>')).toBe('HTTP 502 (server error page)');
+  });
+
+  it('truncates plain-text bodies to 200 chars', () => {
+    const body = 'x'.repeat(500);
+    const msg = describeHttpError(429, body);
+    expect(msg.startsWith('HTTP 429: ')).toBe(true);
+    expect(msg.length).toBeLessThanOrEqual(210);
+  });
+
+  it('handles an empty body', () => {
+    expect(describeHttpError(503, '')).toBe('HTTP 503');
   });
 });
