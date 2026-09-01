@@ -14,10 +14,21 @@
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.15s;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .actionBtn:hover { background: var(--color-surface-container-high); }
 .primary { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* On narrow screens shrink the four action buttons so they stay on one row. */
+@media (max-width: 480px) {
+  .actionBtn {
+    padding: 3px 8px;
+    font-size: 11px;
+    border-radius: 14px;
+  }
+}
 
 .searchBar {
   padding: 0 16px 8px;

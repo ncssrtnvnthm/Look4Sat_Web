@@ -59,18 +59,43 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   padding: 8px 16px 4px;
 }
 
 .topBarTitle {
   font-size: 18px;
   font-weight: 600;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* Keep actions on one row: shrink buttons via page media queries and, if they
+   still don't fit (very narrow screens), scroll horizontally instead of
+   wrapping into a second row. */
 .topBarActions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.topBarActions::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .topBar {
+    padding: 8px 10px 4px;
+  }
+  .topBarActions {
+    gap: 4px;
+  }
 }
 
 /* SwipeableItem */
