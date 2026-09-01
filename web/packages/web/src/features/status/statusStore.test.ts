@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  parseReports,
+  buildStatuses,
   classifyBand,
   stripBandSuffix,
   satSummary,
@@ -152,5 +154,39 @@ describe('buildStatusCsv', () => {
     };
     const csv = buildStatusCsv(reports);
     expect(csv).toContain('"A,B"');
+  });
+});
+
+describe('numeric report ids (AMSAT returns numbers)', () => {
+  it('parseReports converts numeric ids to strings', () => {
+    const json = {
+      data: [
+        { id: 1352624, name: 'FO-29_[V/u]', reported_time: '2026-09-01T17:30:00Z', callsign: 'ZL3AHW/M', report: 'Heard', grid_square: 'RE56uc' },
+      ],
+    };
+    const parsed = parseReports(json);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].id).toBe('1352624');
+  });
+
+  it('slot reportIds resolve in the reports map (regression: empty ids broke details)', () => {
+    const json = {
+      data: [
+        { id: 1352624, name: 'FO-29_[V/u]', reported_time: '2026-09-01T17:30:00Z', callsign: 'ZL3AHW/M', report: 'Heard', grid_square: 'RE56uc' },
+        { id: 1352623, name: 'FO-29_[V/u]', reported_time: '2026-09-01T16:30:00Z', callsign: 'EA5JHM', report: 'Telemetry Only', grid_square: 'IM99sl' },
+      ],
+    };
+    const apiReports = parseReports(json);
+    const statuses = buildStatuses(['FO-29_[V/u]'], apiReports, Date.parse('2026-09-01T18:00:00Z'));
+    const reports: Record<string, SatReport> = {};
+    for (const r of apiReports) {
+      reports[r.id] = report(r.id, r.report, r.timeMs);
+    }
+    const slots = statuses[0].days[0].slots;
+    const newestSlot = slots.find((s) => s.count > 0);
+    expect(newestSlot).toBeDefined();
+    expect(newestSlot!.count).toBe(2);
+    // Every reportId in the slot must resolve to an entry in the reports map.
+    expect(newestSlot!.reportIds.every((id) => reports[id] !== undefined)).toBe(true);
   });
 });

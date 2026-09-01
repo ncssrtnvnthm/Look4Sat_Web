@@ -227,7 +227,7 @@ const MONTH_ABBR = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
-interface ApiReport {
+export interface ApiReport {
   id: string;
   name: string;
   callsign: string;
@@ -249,7 +249,7 @@ async function fetchJson(url: string): Promise<unknown> {
   return res.json();
 }
 
-function parseCatalog(json: unknown): CatalogEntry[] {
+export function parseCatalog(json: unknown): CatalogEntry[] {
   try {
     const data = (json as { data?: unknown }).data;
     if (!Array.isArray(data)) return [];
@@ -271,7 +271,7 @@ function parseCatalog(json: unknown): CatalogEntry[] {
   }
 }
 
-function parseReports(json: unknown): ApiReport[] {
+export function parseReports(json: unknown): ApiReport[] {
   try {
     const data = (json as { data?: unknown }).data;
     if (!Array.isArray(data)) return [];
@@ -283,7 +283,7 @@ function parseReports(json: unknown): ApiReport[] {
       const timeMs = Date.parse(iso);
       if (Number.isNaN(timeMs)) continue;
       out.push({
-        id: typeof obj.id === 'string' ? obj.id : '',
+        id: typeof obj.id === 'string' ? obj.id : typeof obj.id === 'number' ? String(obj.id) : '',
         name: typeof obj.name === 'string' ? obj.name : '',
         callsign: typeof obj.callsign === 'string' ? obj.callsign : '',
         report: typeof obj.report === 'string' ? obj.report : '',
@@ -299,7 +299,7 @@ function parseReports(json: unknown): ApiReport[] {
 }
 
 /** Build one SatStatus (3 days x 12 slots) per catalog satellite, slotting reports by age. */
-function buildStatuses(names: string[], reports: ApiReport[], nowMs: number): SatStatus[] {
+export function buildStatuses(names: string[], reports: ApiReport[], nowMs: number): SatStatus[] {
   const nowSec = Math.floor(nowMs / 1000);
   const byName = new Map<string, ApiReport[]>();
   for (const r of reports) {

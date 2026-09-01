@@ -196,6 +196,16 @@ function SatSection({
 
       {selected && (
         <div className={styles.details}>
+          <div className={styles.detailsHeader}>
+            <span className={styles.detailsTitle}>Reports (72h)</span>
+            <button
+              className={styles.detailsClose}
+              onClick={() => onToggle(status.name)}
+              title="Hide details"
+            >
+              ▲ Hide
+            </button>
+          </div>
           {allReports.map((r) => (
             <div key={r.id} className={styles.detailRow}>
               <span className={styles.detailDot} style={{ background: getStatusColor(r.statusText) }} />
@@ -376,7 +386,7 @@ export function StatusPage() {
               catalog={catalog}
               tracked={tracked}
               selected={selectedName === status.name}
-              onToggle={store.selectSatellite}
+              onToggle={(name) => store.selectSatellite(selectedName === name ? null : name)}
             />
           ))}
 
